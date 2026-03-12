@@ -26,13 +26,11 @@ def _initialize_firebase():
     service_account_path = os.getenv("FIREBASE_SERVICE_ACCOUNT_KEY_PATH", "serviceAccountKey.json")
 
     if not os.path.exists(service_account_path):
-        raise FileNotFoundError(
-            f"Firebase service account key not found at: '{service_account_path}'. "
-            "Please download it from your Firebase console and set "
-            "FIREBASE_SERVICE_ACCOUNT_KEY_PATH in your .env file."
-        )
-
-    cred = credentials.Certificate(service_account_path)
-    firebase_admin.initialize_app(cred)
+        print(f"⚠️ Service account key not found at '{service_account_path}'. Falling back to Application Default Credentials (ADC)...")
+        # Initialize without creds to use the environment's default identity (e.g., Cloud Run)
+        firebase_admin.initialize_app()
+    else:
+        cred = credentials.Certificate(service_account_path)
+        firebase_admin.initialize_app(cred)
     _db = firestore.client()
     print("✅ Connected to Firestore successfully.")
