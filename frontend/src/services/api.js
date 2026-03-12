@@ -3,7 +3,7 @@
  * Base URL points to the local dev server by default.
  */
 
-const BASE_URL = 'http://172.20.10.11:8000';
+const BASE_URL = 'http://172.20.10.6:8000';
 
 async function apiFetch(path, options = {}) {
     try {
