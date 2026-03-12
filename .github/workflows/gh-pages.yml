@@ -37,6 +37,12 @@ jobs:
         working-directory: ./frontend
         run: npx expo export -p web
 
+      - name: Prep GitHub Pages
+        working-directory: ./frontend/dist
+        run: |
+          touch .nojekyll
+          cp index.html 404.html
+
       - name: Setup GitHub Pages
         uses: actions/configure-pages@v4
 
