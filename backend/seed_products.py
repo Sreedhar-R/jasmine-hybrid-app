@@ -21,7 +21,7 @@ products = [
         'discountedPrice': 5.49,
         'price': 5.49,
         'image': 'https://images.unsplash.com/photo-1591073113125-e46713c829ed?w=400',
-        'category': 'Fruits',
+        'categories': ['Fruits', 'Exotics', 'Summer Specials'],
         'description': 'Sweet and aromatic Alphonso mangoes',
         'unit': '1kg',
         'inStock': True
@@ -54,7 +54,7 @@ products = [
         'discountedPrice': 6.99,
         'price': 6.99,
         'image': 'https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?w=400',
-        'category': 'Meat',
+        'categories': ['Meat', 'Proteins', 'Daily Essentials'],
         'description': 'Free-range boneless chicken breast',
         'unit': '500g',
         'inStock': True
@@ -65,7 +65,7 @@ products = [
         'discountedPrice': 9.99,
         'price': 9.99,
         'image': 'https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?w=400',
-        'category': 'Seafood',
+        'categories': ['Seafood', 'Proteins'],
         'description': 'Fresh Atlantic salmon fillet',
         'unit': '300g',
         'inStock': True

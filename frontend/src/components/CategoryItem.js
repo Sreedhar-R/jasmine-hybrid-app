@@ -6,10 +6,14 @@ const CategoryItem = ({ item, onPress, containerStyle, imageContainerStyle, imag
     return (
         <TouchableOpacity style={[styles.container, containerStyle]} onPress={onPress} activeOpacity={0.75}>
             <View style={[styles.imageContainer, imageContainerStyle, isSelected && styles.imageContainerSelected]}>
-                <Image
-                    source={{ uri: item.image }}
-                    style={[styles.image, imageStyle]}
-                />
+                {item.image && typeof item.image === 'string' && item.image.startsWith('http') ? (
+                    <Image
+                        source={{ uri: item.image }}
+                        style={[styles.image, imageStyle]}
+                    />
+                ) : (
+                    <Text style={{ fontSize: 32 }}>{item.emoji ?? '📂'}</Text>
+                )}
             </View>
             <Text style={[styles.name, isSelected && styles.nameSelected]}>{item.name}</Text>
         </TouchableOpacity>

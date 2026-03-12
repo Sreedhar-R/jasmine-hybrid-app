@@ -21,6 +21,9 @@ const ProductDetailModal = ({ item, visible, onClose, onAddToCart }) => {
             ? [item.image]
             : [];
 
+    // Evaluate if the item can be purchased
+    const isAvailable = item.inStock !== false && (item.stock == null || item.stock > 0);
+
     const imgWidth = Math.min(width, 560) - SIZES.padding * 2;
 
     const hasDiscount = item.originalPrice && item.discountedPrice &&
@@ -127,19 +130,19 @@ const ProductDetailModal = ({ item, visible, onClose, onAddToCart }) => {
 
                             {/* Badges row */}
                             <View style={styles.badgeRow}>
-                                {item.category && (
-                                    <View style={styles.categoryBadge}>
-                                        <Text style={styles.categoryText}>{item.category}</Text>
+                                {(Array.isArray(item.categories) ? item.categories : item.category ? [item.category] : []).map((cat, idx) => (
+                                    <View key={idx} style={styles.categoryBadge}>
+                                        <Text style={styles.categoryText}>{cat}</Text>
                                     </View>
-                                )}
+                                ))}
                                 {item.unit && (
                                     <View style={styles.unitBadge}>
                                         <Text style={styles.unitText}>{item.unit}</Text>
                                     </View>
                                 )}
-                                <View style={[styles.stockBadge, !item.inStock && styles.outOfStockBadge]}>
-                                    <Text style={[styles.stockText, !item.inStock && styles.outOfStockText]}>
-                                        {item.inStock ? '✓ In Stock' : '✕ Out of Stock'}
+                                <View style={[styles.stockBadge, !isAvailable && styles.outOfStockBadge]}>
+                                    <Text style={[styles.stockText, !isAvailable && styles.outOfStockText]}>
+                                        {isAvailable ? '✓ In Stock' : '✕ Out of Stock'}
                                     </Text>
                                 </View>
                             </View>
@@ -173,7 +176,7 @@ const ProductDetailModal = ({ item, visible, onClose, onAddToCart }) => {
                                 <TouchableOpacity
                                     style={[styles.addBtn, added && styles.addBtnAdded]}
                                     onPress={handleAdd}
-                                    disabled={!item.inStock}
+                                    disabled={!isAvailable}
                                 >
                                     <Text style={styles.addBtnText}>
                                         {added ? '✓ Added to Cart!' : 'Add to Cart'}

@@ -16,12 +16,14 @@ const ProductCard = ({ item, onPress, onAddToCart }) => {
         setTimeout(() => setAdded(false), 1200);
     };
 
+    const displayImage = Array.isArray(item.images) && item.images.length > 0 ? item.images[0] : item.image;
+
     return (
         <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.95}>
             {/* Image area — white/light bg like reference */}
             <View style={styles.imageContainer}>
                 <Image
-                    source={{ uri: item.image }}
+                    source={{ uri: displayImage }}
                     style={styles.image}
                     resizeMode="contain"
                 />

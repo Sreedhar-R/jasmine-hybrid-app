@@ -132,7 +132,13 @@ def delete_category(category_id: str):
 def list_products(category: str = None):
     products = get_all_documents("products")
     if category:
-        products = [p for p in products if p.get("category", "").lower() == category.lower()]
+        def match_category(p):
+            target = category.lower()
+            cats = p.get("categories")
+            if isinstance(cats, list):
+                return any(c.lower() == target for c in cats)
+            return p.get("category", "").lower() == target
+        products = [p for p in products if match_category(p)]
     return products
 
 @app.get("/products/search")
@@ -154,6 +160,13 @@ def get_product(product_id: str):
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     return product
+
+@app.delete("/products/{product_id}")
+def delete_product(product_id: str):
+    if not get_document("products", product_id):
+        raise HTTPException(status_code=404, detail="Product not found")
+    delete_document("products", product_id)
+    return {"message": "Product deleted"}
 
 @app.post("/products")
 def create_product(data: dict):

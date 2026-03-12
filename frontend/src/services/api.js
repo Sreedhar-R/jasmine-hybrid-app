@@ -124,5 +124,7 @@ export const createProduct = (data) =>
     apiFetch('/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
 export const updateProduct = (id, data) =>
     apiFetch(`/products/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
+export const deleteProduct = (id) =>
+    apiFetch(`/products/${id}`, { method: 'DELETE' });
 
 

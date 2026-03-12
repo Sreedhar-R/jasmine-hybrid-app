@@ -9,7 +9,7 @@ import Header from '../components/Header';
 import {
     fetchAllOrders, fetchProducts, fetchCategories, fetchBanners,
     fetchSubscribableProducts,
-    createProduct, updateProduct,
+    createProduct, updateProduct, deleteProduct,
     createCategory, updateCategory, deleteCategory,
     createBanner, updateBanner,
 } from '../services/api';
@@ -73,17 +73,19 @@ const StatusBadge = ({ status }) => {
 const FORM_CONFIG = {
     product: [
         { key: 'name', label: 'Product Name', required: true },
-        { key: 'price', label: 'Price (₹)', required: true, numeric: true },
+        { key: 'basePrice', label: 'Original Price (₹)', required: true, numeric: true },
+        { key: 'discountPct', label: 'Discount % (e.g. 15)', numeric: true },
         { key: 'unit', label: 'Unit (e.g. 1kg)' },
-        { key: 'category', label: 'Category' },
+        { key: 'categories', label: 'Categories (comma-separated)' },
         { key: 'description', label: 'Description', multiline: true },
-        { key: 'image', label: 'Image (emoji or URL)' },
+        { key: 'images', label: 'Images (comma-separated URLs)', multiline: true },
         { key: 'stock', label: 'Stock qty', numeric: true },
         { key: 'subscriptionAvailable', label: 'Available for Subscription', toggle: true },
     ],
     category: [
         { key: 'name', label: 'Category Name', required: true },
         { key: 'emoji', label: 'Emoji' },
+        { key: 'image', label: 'Image URL' },
         { key: 'order', label: 'Display Order', numeric: true },
     ],
     banner: [
@@ -105,7 +107,19 @@ const EntityForm = ({ visible, entity, type, onClose, onSave }) => {
         if (!visible) return;
         const init = {};
         fields.forEach(f => {
-            init[f.key] = entity ? (entity[f.key] ?? (f.toggle ? false : '')) : (f.toggle ? false : '');
+            let val = entity ? (entity[f.key] ?? (f.toggle ? false : '')) : (f.toggle ? false : '');
+            if ((f.key === 'categories' || f.key === 'images') && entity) {
+                if (Array.isArray(entity[f.key])) val = entity[f.key].join(', ');
+                else if (f.key === 'categories' && entity.category) val = entity.category;
+                else if (f.key === 'images' && entity.image) val = entity.image;
+            }
+            if (f.key === 'basePrice' && entity) {
+                val = entity.originalPrice || entity.price || '';
+            }
+            if (f.key === 'discountPct' && entity && entity.originalPrice && entity.discountedPrice && entity.originalPrice > entity.discountedPrice) {
+                val = Math.round((1 - entity.discountedPrice / entity.originalPrice) * 100);
+            }
+            init[f.key] = val;
         });
         setForm(init);
     }, [visible, entity]);
@@ -121,9 +135,31 @@ const EntityForm = ({ visible, entity, type, onClose, onSave }) => {
         setSaving(true);
         const payload = { ...form };
         fields.forEach(f => {
-            if (f.numeric && payload[f.key] !== '' && payload[f.key] !== undefined)
+            if (f.numeric && payload[f.key] !== '' && payload[f.key] !== undefined) {
                 payload[f.key] = Number(payload[f.key]);
+            }
+            if ((f.key === 'categories' || f.key === 'images') && typeof payload[f.key] === 'string') {
+                payload[f.key] = payload[f.key].split(',').map(s => s.trim()).filter(Boolean);
+            }
         });
+
+        // Handle discount pricing logic
+        if (type === 'product' && payload.basePrice) {
+            const basePrice = Number(payload.basePrice);
+            const discountPct = Number(payload.discountPct || 0);
+
+            if (discountPct > 0 && discountPct <= 100) {
+                payload.originalPrice = basePrice;
+                payload.price = Number((basePrice * (1 - discountPct / 100)).toFixed(2));
+                payload.discountedPrice = payload.price;
+            } else {
+                payload.price = basePrice;
+                payload.originalPrice = null;
+                payload.discountedPrice = null;
+            }
+            delete payload.basePrice;
+            delete payload.discountPct;
+        }
         try {
             await onSave(payload);
             onClose();
@@ -136,7 +172,7 @@ const EntityForm = ({ visible, entity, type, onClose, onSave }) => {
 
     // Live image preview inside form
     const imgVal = form['image'];
-    const showPreview = type !== 'category' && isUrl(imgVal);
+    const showPreview = isUrl(imgVal);
 
     return (
         <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -146,7 +182,11 @@ const EntityForm = ({ visible, entity, type, onClose, onSave }) => {
                         <Text style={frm.title}>{entity ? `Edit ${type}` : `Add ${type}`}</Text>
                         <TouchableOpacity onPress={onClose}><Text style={frm.close}>✕</Text></TouchableOpacity>
                     </View>
-                    <ScrollView style={{ maxHeight: '82%' }} showsVerticalScrollIndicator={false}>
+                    <ScrollView 
+                        style={{ flexShrink: 1 }} 
+                        contentContainerStyle={{ paddingVertical: 8, paddingRight: 8 }}
+                        showsVerticalScrollIndicator={true}
+                    >
                         {showPreview && (
                             <Image
                                 source={{ uri: imgVal }}
@@ -179,9 +219,14 @@ const EntityForm = ({ visible, entity, type, onClose, onSave }) => {
                             </View>
                         ))}
                     </ScrollView>
-                    <TouchableOpacity style={[frm.saveBtn, saving && { opacity: 0.6 }]} onPress={handleSave} disabled={saving}>
-                        {saving ? <ActivityIndicator color="#fff" /> : <Text style={frm.saveTxt}>💾 Save</Text>}
-                    </TouchableOpacity>
+                    <View style={frm.btnRow}>
+                        <TouchableOpacity style={[frm.cancelBtn, saving && { opacity: 0.6 }]} onPress={onClose} disabled={saving}>
+                            <Text style={frm.cancelTxt}>Cancel</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={[frm.saveBtn, saving && { opacity: 0.6 }]} onPress={handleSave} disabled={saving}>
+                            {saving ? <ActivityIndicator color="#fff" /> : <Text style={frm.saveTxt}>💾 Save</Text>}
+                        </TouchableOpacity>
+                    </View>
                 </View>
             </View>
         </Modal>
@@ -340,20 +385,26 @@ const CrudTab = ({ type, fetchFn, createFn, updateFn, deleteFn, renderRow }) => 
         reload();
     };
     const handleDelete = (item) => {
-        Alert.alert(
-            `Delete ${type}`,
-            `Are you sure you want to delete "${item.name || item.title || item.id}"?`,
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Delete', style: 'destructive',
-                    onPress: async () => {
-                        try { await deleteFn(item.id); reload(); }
-                        catch (e) { Alert.alert('Error', e.message); }
-                    },
-                },
-            ]
-        );
+        const msg = `Are you sure you want to delete "${item.name || item.title || item.id}"?`;
+        const doDelete = async () => {
+            try { await deleteFn(item.id); reload(); }
+            catch (e) { Alert.alert('Error', e.message); }
+        };
+
+        if (Platform.OS === 'web') {
+            if (window.confirm(msg)) {
+                doDelete();
+            }
+        } else {
+            Alert.alert(
+                `Delete ${type}`,
+                msg,
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Delete', style: 'destructive', onPress: doDelete },
+                ]
+            );
+        }
     };
 
     return (
@@ -401,13 +452,27 @@ const CrudTab = ({ type, fetchFn, createFn, updateFn, deleteFn, renderRow }) => 
 };
 
 // ─── Row renderers ────────────────────────────────────────────────────────────
-const ProductRow = (item) => (
-    <View style={adm.richRow}>
-        <Thumb uri={isUrl(item.image) ? item.image : null} emoji={isUrl(item.image) ? null : item.image} size={56} radius={10} />
-        <View style={{ flex: 1, marginLeft: 12 }}>
+const ProductRow = (item) => {
+    const firstImage = Array.isArray(item.images) && item.images.length > 0 ? item.images[0] : item.image;
+    const hasDiscount = item.originalPrice && item.discountedPrice && item.originalPrice > item.discountedPrice;
+    
+    return (
+        <View style={adm.richRow}>
+            <Thumb uri={isUrl(firstImage) ? firstImage : null} emoji={isUrl(firstImage) ? null : firstImage} size={56} radius={10} />
+            <View style={{ flex: 1, marginLeft: 12 }}>
             <Text style={adm.rowTitle}>{item.name}</Text>
-            <Text style={adm.rowPrice}>₹{item.price}  <Text style={adm.rowUnit}>{item.unit}</Text></Text>
-            <Text style={adm.rowMeta}>📂 {item.category || '—'}</Text>
+            
+            {hasDiscount ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                    <Text style={[adm.rowPrice, { color: P.subtle, textDecorationLine: 'line-through', marginRight: 6, fontSize: 13 }]}>₹{item.originalPrice}</Text>
+                    <Text style={adm.rowPrice}>₹{item.discountedPrice}  <Text style={adm.rowUnit}>{item.unit}</Text></Text>
+                    <View style={[adm.chip, { backgroundColor: '#FEE2E2', marginLeft: 8, paddingVertical: 2 }]}><Text style={[adm.chipTxt, { color: '#991B1B' }]}>{Math.round((1 - item.discountedPrice / item.originalPrice) * 100)}% OFF</Text></View>
+                </View>
+            ) : (
+                <Text style={adm.rowPrice}>₹{item.price}  <Text style={adm.rowUnit}>{item.unit}</Text></Text>
+            )}
+
+            <Text style={adm.rowMeta}>📂 {item.categories?.join(', ') || item.category || '—'}</Text>
             <Text style={adm.rowMeta}>
                 {'📦 Stock: '}
                 {item.stock != null
@@ -421,13 +486,12 @@ const ProductRow = (item) => (
             </View>
         </View>
     </View>
-);
+    );
+};
 
 const CategoryRow = (item) => (
     <View style={adm.richRow}>
-        <View style={adm.emojiBox}>
-            <Text style={{ fontSize: 28 }}>{item.emoji ?? '📂'}</Text>
-        </View>
+        <Thumb uri={isUrl(item.image) ? item.image : null} emoji={item.emoji ?? '📂'} size={56} radius={10} />
         <View style={{ flex: 1, marginLeft: 12 }}>
             <Text style={adm.rowTitle}>{item.name}</Text>
             <Text style={adm.rowMeta}>Display order: {item.order ?? '—'}</Text>
@@ -459,13 +523,27 @@ const BannerRow = (item) => (
     </View>
 );
 
-const SubRow = (item) => (
-    <View style={adm.richRow}>
-        <Thumb uri={isUrl(item.image) ? item.image : null} emoji={isUrl(item.image) ? null : item.image} size={56} radius={10} />
-        <View style={{ flex: 1, marginLeft: 12 }}>
+const SubRow = (item) => {
+    const firstImage = Array.isArray(item.images) && item.images.length > 0 ? item.images[0] : item.image;
+    const hasDiscount = item.originalPrice && item.discountedPrice && item.originalPrice > item.discountedPrice;
+
+    return (
+        <View style={adm.richRow}>
+            <Thumb uri={isUrl(firstImage) ? firstImage : null} emoji={isUrl(firstImage) ? null : firstImage} size={56} radius={10} />
+            <View style={{ flex: 1, marginLeft: 12 }}>
             <Text style={adm.rowTitle}>{item.name}</Text>
-            <Text style={adm.rowPrice}>₹{item.price}  <Text style={adm.rowUnit}>{item.unit}</Text></Text>
-            <Text style={adm.rowMeta}>📂 {item.category || '—'}</Text>
+            
+            {hasDiscount ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                    <Text style={[adm.rowPrice, { color: P.subtle, textDecorationLine: 'line-through', marginRight: 6, fontSize: 13 }]}>₹{item.originalPrice}</Text>
+                    <Text style={adm.rowPrice}>₹{item.discountedPrice}  <Text style={adm.rowUnit}>{item.unit}</Text></Text>
+                    <View style={[adm.chip, { backgroundColor: '#FEE2E2', marginLeft: 8, paddingVertical: 2 }]}><Text style={[adm.chipTxt, { color: '#991B1B' }]}>{Math.round((1 - item.discountedPrice / item.originalPrice) * 100)}% OFF</Text></View>
+                </View>
+            ) : (
+                <Text style={adm.rowPrice}>₹{item.price}  <Text style={adm.rowUnit}>{item.unit}</Text></Text>
+            )}
+
+            <Text style={adm.rowMeta}>📂 {item.categories?.join(', ') || item.category || '—'}</Text>
             <Text style={adm.rowMeta}>
                 {'📦 Stock: '}
                 {item.stock != null
@@ -476,7 +554,8 @@ const SubRow = (item) => (
             <View style={adm.chip}><Text style={adm.chipTxt}>📅 Subscription enabled</Text></View>
         </View>
     </View>
-);
+    );
+};
 
 // ─── Main AdminScreen ─────────────────────────────────────────────────────────
 const AdminScreen = () => {
@@ -506,7 +585,7 @@ const AdminScreen = () => {
                 {tab === 0 && <OrdersTab />}
 
                 {tab === 1 && (
-                    <CrudTab type="product" fetchFn={fetchProducts} createFn={createProduct} updateFn={updateProduct}
+                    <CrudTab type="product" fetchFn={fetchProducts} createFn={createProduct} updateFn={updateProduct} deleteFn={deleteProduct}
                         renderRow={ProductRow} />
                 )}
 
@@ -527,7 +606,7 @@ const AdminScreen = () => {
                 )}
 
                 {tab === 4 && (
-                    <CrudTab type="product" fetchFn={fetchSubscribableProducts} createFn={createProduct} updateFn={updateProduct}
+                    <CrudTab type="product" fetchFn={fetchSubscribableProducts} createFn={createProduct} updateFn={updateProduct} deleteFn={deleteProduct}
                         renderRow={SubRow} />
                 )}
             </View>
@@ -606,7 +685,7 @@ const adm = StyleSheet.create({
 
 const frm = StyleSheet.create({
     overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
-    sheet: { backgroundColor: '#fff', borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 20, paddingBottom: 36 },
+    sheet: { backgroundColor: '#fff', borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 24, paddingBottom: 12, marginTop: 40, maxHeight: '90%', flexShrink: 1 },
     titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
     title: { fontSize: 18, fontWeight: '800', color: '#111827', textTransform: 'capitalize' },
     close: { fontSize: 22, color: '#6B7280', padding: 4 },
@@ -615,6 +694,9 @@ const frm = StyleSheet.create({
     label: { fontSize: 11, fontWeight: '700', color: '#6B7280', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 },
     input: { borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#111827', backgroundColor: '#FAFAFA' },
     inputMulti: { height: 80, textAlignVertical: 'top' },
-    saveBtn: { backgroundColor: '#2D6A4F', borderRadius: 12, padding: 14, alignItems: 'center', marginTop: 16 },
+    btnRow: { flexDirection: 'row', gap: 12, marginTop: 16 },
+    cancelBtn: { flex: 1, backgroundColor: '#F3F4F6', borderRadius: 12, padding: 14, alignItems: 'center' },
+    cancelTxt: { color: '#4B5563', fontWeight: '700', fontSize: 15 },
+    saveBtn: { flex: 1, backgroundColor: '#2D6A4F', borderRadius: 12, padding: 14, alignItems: 'center' },
     saveTxt: { color: '#fff', fontWeight: '800', fontSize: 15 },
 });
