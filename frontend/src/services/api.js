@@ -3,7 +3,14 @@
  * Base URL points to the local dev server by default.
  */
 
-const BASE_URL = 'http://localhost:8000';
+// Determine if we are running locally or if this is the deployed production build
+const isLocal = typeof window !== 'undefined' && 
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
+// Base URL points to local dev server or live Cloud Run backend
+const BASE_URL = isLocal 
+    ? 'http://localhost:8000' 
+    : 'https://jasmine-backend-331312100274.us-central1.run.app';
 
 async function apiFetch(path, options = {}) {
     try {
