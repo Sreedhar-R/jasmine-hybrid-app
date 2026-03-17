@@ -228,6 +228,7 @@ const CheckoutScreen = ({ navigation }) => {
     /* ─── Map picker ─── */
     const [showMapPicker, setShowMapPicker] = useState(false);
     const [mapCoords, setMapCoords] = useState(null);   // { lat, lng }
+    const [mapUrl, setMapUrl] = useState(null);
     const [bookingFor, setBookingFor] = useState(null); // { name, phone } | null
 
     /* ─── Placing order ─── */
@@ -261,9 +262,10 @@ const CheckoutScreen = ({ navigation }) => {
         else Alert.alert('Invalid code', 'Discount code not recognised.');
     };
 
-    const handleMapConfirm = ({ address, coords, bookingFor: bf }) => {
+    const handleMapConfirm = ({ address, coords, mapUrl: mUrl, bookingFor: bf }) => {
         setShowMapPicker(false);
         if (coords) setMapCoords(coords);
+        if (mUrl) setMapUrl(mUrl);
         if (address) {
             setForm(f => ({
                 ...f,
@@ -293,6 +295,7 @@ const CheckoutScreen = ({ navigation }) => {
                 phone: form.phone || (user?.phone ?? ''),
                 lat: selectedAddr.lat ?? null,
                 lng: selectedAddr.lng ?? null,
+                mapUrl: selectedAddr.mapUrl ?? null,
             };
         }
         return {
@@ -307,6 +310,7 @@ const CheckoutScreen = ({ navigation }) => {
             phone: form.phone,
             lat: mapCoords?.lat ?? null,
             lng: mapCoords?.lng ?? null,
+            mapUrl: mapUrl ?? null,
         };
     };
 

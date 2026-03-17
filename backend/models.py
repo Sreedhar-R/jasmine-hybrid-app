@@ -30,6 +30,7 @@ class AddressCreate(BaseModel):
     isPrimary: bool = False
     lat: Optional[float] = None
     lng: Optional[float] = None
+    mapUrl: Optional[str] = None
 
 
 class AddressUpdate(BaseModel):
@@ -85,6 +86,7 @@ class AddressSnap(BaseModel):
     zipCode: str
     country: str = "India"
     phone: str
+    mapUrl: Optional[str] = None
 
 class OrderCreate(BaseModel):
     userId: Optional[str] = None

@@ -56,10 +56,15 @@ const MapAddressPicker = ({ visible, onClose, onConfirm }) => {
         }
     }, [visible]);
 
+    const generateMapUrl = (lat, lng) => {
+        return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+    };
+
     const handleConfirm = () => {
         onConfirm({
             address: parsedAddr,
             coords,
+            mapUrl: generateMapUrl(coords.lat, coords.lng),
             bookingFor: forSomeoneElse ? recipient : null,
         });
     };

@@ -1,11 +1,12 @@
 /**
  * MapAddressPicker.web.js
  * Web implementation using @react-google-maps/api.
+ * Layout: Split screen (25% Map Left / 75% Details Right) for desktop/web.
  */
 import React, { useState, useCallback, useEffect } from 'react';
 import {
     Modal, View, Text, TouchableOpacity, TextInput,
-    StyleSheet, ActivityIndicator, ScrollView,
+    StyleSheet, ActivityIndicator, ScrollView, Dimensions, useWindowDimensions
 } from 'react-native';
 import { GoogleMap, useJsApiLoader, Marker } from '@react-google-maps/api';
 
@@ -26,6 +27,9 @@ const MAP_CONTAINER_STYLE = {
 const LIBRARIES = ['places'];
 
 const MapAddressPicker = ({ visible, onClose, onConfirm }) => {
+    const { width: windowWidth } = useWindowDimensions();
+    const isDesktop = windowWidth > 768;
+
     const { isLoaded, loadError } = useJsApiLoader({
         id: 'google-map-script',
         googleMapsApiKey: GOOGLE_MAPS_API_KEY,
@@ -57,6 +61,7 @@ const MapAddressPicker = ({ visible, onClose, onConfirm }) => {
                     state: getComp('administrative_area_level_1'),
                     zipCode: getComp('postal_code'),
                     country: getComp('country') || 'India',
+                    formatted: results[0].formatted_address
                 });
             } else {
                 console.error('Geocode failed:', status);
@@ -65,7 +70,6 @@ const MapAddressPicker = ({ visible, onClose, onConfirm }) => {
         });
     }, []);
 
-    // Reverse geocode on open or when coords change externally
     useEffect(() => {
         if (visible && isLoaded) {
             reverseGeocode(coords.lat, coords.lng);
@@ -112,10 +116,15 @@ const MapAddressPicker = ({ visible, onClose, onConfirm }) => {
         );
     };
 
+    const generateMapUrl = (lat, lng) => {
+        return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+    };
+
     const handleConfirm = () => {
         onConfirm({
             address: parsedAddr,
             coords,
+            mapUrl: generateMapUrl(coords.lat, coords.lng),
             bookingFor: forSomeoneElse ? recipient : null,
         });
     };
@@ -133,9 +142,9 @@ const MapAddressPicker = ({ visible, onClose, onConfirm }) => {
     const handleClose = () => { reset(); onClose(); };
 
     return (
-        <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
+        <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
             <View style={s.overlay}>
-                <View style={s.sheet}>
+                <View style={[s.sheet, isDesktop && s.desktopSheet]}>
                     {/* Header */}
                     <View style={s.header}>
                         <Text style={s.title}>📍 Choose Delivery Location</Text>
@@ -144,9 +153,9 @@ const MapAddressPicker = ({ visible, onClose, onConfirm }) => {
                         </TouchableOpacity>
                     </View>
 
-                    <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
-                        {/* Map Container */}
-                        <View style={s.mapWrap}>
+                    <View style={[s.contentRow, !isDesktop && s.contentColumn]}>
+                        {/* Map (25% on Desktop) */}
+                        <View style={[s.mapWrap, isDesktop ? s.mapDesktop : s.mapMobile]}>
                             {isLoaded ? (
                                 <GoogleMap
                                     mapContainerStyle={MAP_CONTAINER_STYLE}
@@ -172,103 +181,128 @@ const MapAddressPicker = ({ visible, onClose, onConfirm }) => {
                                 <View style={s.mapLoading}>
                                     <ActivityIndicator size="large" color={GREEN} />
                                     {loadError && (
-                                        <Text style={s.loadError}>
-                                            Map Load Error. Check API Key or Internet.
+                                        <Text style={s.loadError}>Map Error. Check API Key.</Text>
+                                    )}
+                                    <Text style={s.addrHint}>Loading Maps...</Text>
+                                </View>
+                            )}
+                            {!isDesktop && (
+                                <TouchableOpacity
+                                    style={s.floatingLocBtn}
+                                    onPress={useMyLocation}
+                                    disabled={locLoading}
+                                >
+                                    {locLoading ? <ActivityIndicator size="small" color="#fff" /> : <Text style={{fontSize: 20}}>🎯</Text>}
+                                </TouchableOpacity>
+                            )}
+                        </View>
+
+                        {/* Details (75% on Desktop) */}
+                        <ScrollView 
+                            style={[s.detailsWrap, isDesktop && s.detailsDesktop]} 
+                            showsVerticalScrollIndicator={false}
+                        >
+                            <View style={{ padding: isDesktop ? 30 : 20 }}>
+                                <Text style={s.sectionTitle}>Delivery Details</Text>
+                                
+                                {isDesktop && (
+                                    <TouchableOpacity
+                                        style={[s.locBtn, locLoading && s.locBtnDisabled]}
+                                        onPress={useMyLocation}
+                                        disabled={locLoading}
+                                    >
+                                        {locLoading
+                                            ? <ActivityIndicator size="small" color="#fff" />
+                                            : <Text style={s.locTxt}>🎯  Use My Current Location</Text>
+                                        }
+                                    </TouchableOpacity>
+                                )}
+                                {locError ? <Text style={s.locError}>{locError}</Text> : null}
+
+                                {/* Resolved address */}
+                                <View style={s.addrBox}>
+                                    {geocoding ? (
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                            <ActivityIndicator size="small" color={GREEN} />
+                                            <Text style={s.addrHint}>Finding address…</Text>
+                                        </View>
+                                    ) : parsedAddr ? (
+                                        <View>
+                                            <Text style={s.addrLabel}>Selected Address</Text>
+                                            <Text style={s.addrLine}>{parsedAddr.formatted || parsedAddr.street}</Text>
+                                            <View style={s.badgeRow}>
+                                                <View style={s.cityBadge}><Text style={s.badgeText}>{parsedAddr.city}</Text></View>
+                                                {parsedAddr.zipCode && (
+                                                    <View style={s.zipBadge}><Text style={s.badgeText}>{parsedAddr.zipCode}</Text></View>
+                                                )}
+                                            </View>
+                                        </View>
+                                    ) : (
+                                        <Text style={s.addrHint}>
+                                            {isDesktop 
+                                                ? "Select a point on the left map to set your location" 
+                                                : "Tap map or drag pin to set location"}
                                         </Text>
                                     )}
-                                    <Text style={s.addrHint}>Loading Google Maps...</Text>
                                 </View>
-                            )}
-                        </View>
 
-                        {/* Use my location */}
-                        <TouchableOpacity
-                            style={[s.locBtn, locLoading && s.locBtnDisabled]}
-                            onPress={useMyLocation}
-                            disabled={locLoading}
-                        >
-                            {locLoading
-                                ? <ActivityIndicator size="small" color="#fff" />
-                                : <Text style={s.locTxt}>🎯  Use My Location</Text>
-                            }
-                        </TouchableOpacity>
+                                {/* Someone Else Toggle */}
+                                <TouchableOpacity
+                                    style={s.toggleRow}
+                                    onPress={() => setForSomeoneElse(v => !v)}
+                                    activeOpacity={0.7}
+                                >
+                                    <View style={[s.checkbox, forSomeoneElse && s.checkboxOn]}>
+                                        {forSomeoneElse && <Text style={s.checkTick}>✓</Text>}
+                                    </View>
+                                    <View>
+                                        <Text style={s.toggleLabel}>Booking for someone else?</Text>
+                                        <Text style={s.toggleSub}>Add recipient info for smooth delivery</Text>
+                                    </View>
+                                </TouchableOpacity>
 
-                        {locError ? <Text style={s.locError}>{locError}</Text> : null}
+                                {forSomeoneElse && (
+                                    <View style={s.recipientBox}>
+                                        <TextInput
+                                            style={s.input}
+                                            placeholder="Recipient's Name"
+                                            placeholderTextColor="#aaa"
+                                            value={recipient.name}
+                                            onChangeText={v => setRecipient(r => ({ ...r, name: v }))}
+                                        />
+                                        <TextInput
+                                            style={[s.input, { marginTop: 15 }]}
+                                            placeholder="Recipient's Phone Number"
+                                            placeholderTextColor="#aaa"
+                                            keyboardType="phone-pad"
+                                            value={recipient.phone}
+                                            onChangeText={v => setRecipient(r => ({ ...r, phone: v }))}
+                                        />
+                                    </View>
+                                )}
 
-                        {/* Resolved address */}
-                        <View style={s.addrBox}>
-                            {geocoding ? (
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                    <ActivityIndicator size="small" color={GREEN} />
-                                    <Text style={s.addrHint}>Finding address…</Text>
-                                </View>
-                            ) : parsedAddr ? (
-                                <View>
-                                    <Text style={s.addrLabel}>Selected Location</Text>
-                                    <Text style={s.addrLine}>
-                                        {[parsedAddr.street, parsedAddr.city].filter(Boolean).join(', ')}
-                                    </Text>
-                                    {(parsedAddr.state || parsedAddr.zipCode) ? (
-                                        <Text style={s.addrLine}>
-                                            {[parsedAddr.state, parsedAddr.zipCode].filter(Boolean).join(' – ')}
+                                {/* Confirm section */}
+                                <View style={s.buttonRow}>
+                                    <TouchableOpacity 
+                                        style={s.cancelBtn} 
+                                        onPress={handleClose}
+                                    >
+                                        <Text style={s.cancelTxt}>Cancel</Text>
+                                    </TouchableOpacity>
+                                    
+                                    <TouchableOpacity
+                                        style={[s.confirmBtn, !parsedAddr && s.confirmDisabled]}
+                                        onPress={handleConfirm}
+                                        disabled={!parsedAddr}
+                                    >
+                                        <Text style={s.confirmTxt}>
+                                            {parsedAddr ? '✓  Confirm Location' : 'Select Location'}
                                         </Text>
-                                    ) : null}
-                                    <Text style={s.addrLine2}>{parsedAddr.country}</Text>
+                                    </TouchableOpacity>
                                 </View>
-                            ) : (
-                                <Text style={s.addrHint}>
-                                    Tap on the map or drag the 📍 pin to set your delivery location
-                                </Text>
-                            )}
-                        </View>
-
-                        {/* Booking for someone else */}
-                        <TouchableOpacity
-                            style={s.toggleRow}
-                            onPress={() => setForSomeoneElse(v => !v)}
-                            activeOpacity={0.7}
-                        >
-                            <View style={[s.checkbox, forSomeoneElse && s.checkboxOn]}>
-                                {forSomeoneElse && <Text style={s.checkTick}>✓</Text>}
                             </View>
-                            <View>
-                                <Text style={s.toggleLabel}>Booking for someone else</Text>
-                                <Text style={s.toggleSub}>Add recipient's name and phone number</Text>
-                            </View>
-                        </TouchableOpacity>
-
-                        {forSomeoneElse && (
-                            <View style={s.recipientBox}>
-                                <Text style={s.recipientTitle}>👤 Recipient Details</Text>
-                                <TextInput
-                                    style={s.input}
-                                    placeholder="Recipient's full name"
-                                    placeholderTextColor="#aaa"
-                                    value={recipient.name}
-                                    onChangeText={v => setRecipient(r => ({ ...r, name: v }))}
-                                />
-                                <TextInput
-                                    style={[s.input, { marginTop: 10 }]}
-                                    placeholder="Recipient's phone number"
-                                    placeholderTextColor="#aaa"
-                                    keyboardType="phone-pad"
-                                    value={recipient.phone}
-                                    onChangeText={v => setRecipient(r => ({ ...r, phone: v }))}
-                                />
-                            </View>
-                        )}
-
-                        {/* Confirm button */}
-                        <TouchableOpacity
-                            style={[s.confirmBtn, !parsedAddr && s.confirmDisabled]}
-                            onPress={handleConfirm}
-                            disabled={!parsedAddr}
-                        >
-                            <Text style={s.confirmTxt}>
-                                {parsedAddr ? '✓  Confirm Location' : 'Select a location on the map'}
-                            </Text>
-                        </TouchableOpacity>
-                    </ScrollView>
+                        </ScrollView>
+                    </View>
                 </View>
             </View>
         </Modal>
@@ -278,158 +312,202 @@ const MapAddressPicker = ({ visible, onClose, onConfirm }) => {
 const s = StyleSheet.create({
     overlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        justifyContent: 'flex-end',
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
     },
     sheet: {
         backgroundColor: '#fff',
-        borderTopLeftRadius: 20,
-        borderTopRightRadius: 20,
-        maxHeight: '92%',
-        paddingBottom: 24,
+        borderRadius: 20,
+        width: '100%',
+        maxWidth: 500,
+        overflow: 'hidden',
+        elevation: 25,
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: -4 },
-        shadowOpacity: 0.15,
-        shadowRadius: 12,
-        elevation: 20,
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.25,
+        shadowRadius: 20,
+    },
+    desktopSheet: {
+        maxWidth: 1400,
+        height: '90%',
     },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 20,
-        paddingVertical: 16,
+        paddingHorizontal: 25,
+        paddingVertical: 20,
         borderBottomWidth: 1,
-        borderBottomColor: '#f0f0f0',
+        borderBottomColor: '#eee',
     },
     title: {
-        fontSize: 17,
-        fontWeight: '800',
-        color: '#1a1a1a',
+        fontSize: 18,
+        fontWeight: '900',
+        color: GREEN,
+        letterSpacing: -0.5,
     },
     closeBtn: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        backgroundColor: '#f0f0f0',
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    closeTxt: { fontSize: 14, color: '#555', fontWeight: '700' },
-
-    // Map
-    mapWrap: {
-        width: '100%',
-        height: 320,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
         backgroundColor: '#f5f5f5',
-    },
-    mapLoading: {
-        flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        gap: 12,
     },
-    loadError: {
-        color: '#C0392B',
-        fontSize: 12,
-        textAlign: 'center',
-        paddingHorizontal: 40,
+    closeTxt: { fontSize: 14, color: '#333', fontWeight: 'bold' },
+
+    contentRow: {
+        flex: 1,
+        flexDirection: 'row',
+    },
+    contentColumn: {
+        flexDirection: 'column',
     },
 
-    // Location button
-    locBtn: {
-        marginHorizontal: 20,
-        marginTop: 14,
-        backgroundColor: '#2196F3',
-        borderRadius: 10,
-        paddingVertical: 12,
+    // Map Section
+    mapWrap: {
+        backgroundColor: '#f0f0f0',
+        position: 'relative',
+    },
+    mapDesktop: {
+        width: '75%',
+        height: '100%',
+        borderRightWidth: 1,
+        borderRightColor: '#eee',
+    },
+    mapMobile: {
+        width: '100%',
+        height: 300,
+    },
+    floatingLocBtn: {
+        position: 'absolute',
+        bottom: 20,
+        right: 20,
+        backgroundColor: '#fff',
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        justifyContent: 'center',
         alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 5,
+        elevation: 5,
+    },
+
+    // Details Section
+    detailsWrap: {
+        backgroundColor: '#fff',
+    },
+    detailsDesktop: {
+        width: '25%',
+        height: '100%',
+    },
+    sectionTitle: {
+        fontSize: 20,
+        fontWeight: '800',
+        color: '#1a1a1a',
+        marginBottom: 15,
+    },
+
+    locBtn: {
+        backgroundColor: '#eff6ff',
+        borderRadius: 12,
+        paddingVertical: 14,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#bfdbfe',
+        marginBottom: 20,
     },
     locBtnDisabled: { opacity: 0.6 },
-    locTxt: { color: '#fff', fontWeight: '700', fontSize: 14 },
-    locError: {
-        marginHorizontal: 20,
-        marginTop: 6,
-        fontSize: 12,
-        color: '#C0392B',
-        lineHeight: 18,
-    },
+    locTxt: { color: '#2563eb', fontWeight: '700', fontSize: 14 },
+    locError: { color: '#dc2626', fontSize: 13, marginBottom: 15 },
 
-    // Address box
     addrBox: {
-        marginHorizontal: 20,
-        marginTop: 14,
-        backgroundColor: '#F8F9FA',
-        borderRadius: 10,
-        padding: 14,
+        backgroundColor: '#f8fafc',
+        borderRadius: 12,
+        padding: 15,
         borderWidth: 1,
-        borderColor: '#E8E8E8',
-        minHeight: 56,
-        justifyContent: 'center',
+        borderColor: '#e2e8f0',
+        marginBottom: 20,
     },
-    addrLabel: { fontSize: 11, color: '#888', fontWeight: '600', marginBottom: 4, textTransform: 'uppercase' },
-    addrLine: { fontSize: 14, color: '#1a1a1a', lineHeight: 21, fontWeight: '500' },
-    addrLine2: { fontSize: 12, color: '#888', marginTop: 2 },
-    addrHint: { fontSize: 13, color: '#aaa', lineHeight: 19, textAlign: 'center' },
+    addrLabel: { fontSize: 11, color: '#64748b', fontWeight: '700', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
+    addrLine: { fontSize: 16, color: '#1e293b', fontWeight: '600', lineHeight: 24 },
+    addrHint: { fontSize: 14, color: '#94a3b8', textAlign: 'center', fontStyle: 'italic' },
+    badgeRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
+    cityBadge: { backgroundColor: '#f1f5f9', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
+    zipBadge: { backgroundColor: '#f1f5f9', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
+    badgeText: { fontSize: 12, color: '#475569', fontWeight: '600' },
 
-    // Someone else toggle
     toggleRow: {
         flexDirection: 'row',
         alignItems: 'flex-start',
-        marginHorizontal: 20,
-        marginTop: 16,
-        gap: 12,
+        gap: 15,
+        marginBottom: 25,
     },
     checkbox: {
-        width: 20,
-        height: 20,
-        borderRadius: 4,
+        width: 24,
+        height: 24,
+        borderRadius: 6,
         borderWidth: 2,
         borderColor: GREEN,
         justifyContent: 'center',
         alignItems: 'center',
         marginTop: 2,
-        flexShrink: 0,
     },
     checkboxOn: { backgroundColor: GREEN },
-    checkTick: { color: '#fff', fontSize: 12, fontWeight: '800' },
-    toggleLabel: { fontSize: 14, fontWeight: '700', color: '#1a1a1a' },
-    toggleSub: { fontSize: 12, color: '#888', marginTop: 2 },
+    checkTick: { color: '#fff', fontSize: 14, fontWeight: '900' },
+    toggleLabel: { fontSize: 16, fontWeight: '700', color: '#1a1a1a' },
+    toggleSub: { fontSize: 13, color: '#64748b', marginTop: 3 },
 
-    // Recipient box
     recipientBox: {
-        marginHorizontal: 20,
-        marginTop: 12,
-        backgroundColor: '#F8F0E8',
-        borderRadius: 10,
-        padding: 14,
+        backgroundColor: '#fff7ed',
+        borderRadius: 12,
+        padding: 20,
         borderWidth: 1,
-        borderColor: '#E8D8C0',
+        borderColor: '#ffedd5',
+        marginBottom: 25,
     },
-    recipientTitle: { fontSize: 13, fontWeight: '700', color: '#1a1a1a', marginBottom: 10 },
     input: {
         backgroundColor: '#fff',
         borderWidth: 1,
-        borderColor: '#D0D0D0',
-        borderRadius: 8,
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        fontSize: 14,
-        color: '#1a1a1a',
-        outlineStyle: 'none',
+        borderColor: '#e2e8f0',
+        borderRadius: 10,
+        paddingHorizontal: 15,
+        paddingVertical: 12,
+        fontSize: 15,
+        color: '#1e293b',
     },
 
-    // Confirm
-    confirmBtn: {
-        marginHorizontal: 20,
-        marginTop: 16,
-        backgroundColor: GREEN,
-        borderRadius: 10,
+    buttonRow: {
+        flexDirection: 'row',
+        gap: 15,
+        marginTop: 10,
+    },
+    cancelBtn: {
+        flex: 1,
         paddingVertical: 16,
         alignItems: 'center',
+        borderRadius: 12,
+        backgroundColor: '#f1f5f9',
     },
-    confirmDisabled: { backgroundColor: '#ccc' },
-    confirmTxt: { color: '#fff', fontWeight: '800', fontSize: 15 },
+    cancelTxt: { color: '#64748b', fontWeight: '700', fontSize: 15 },
+    confirmBtn: {
+        flex: 2,
+        backgroundColor: GREEN,
+        borderRadius: 12,
+        paddingVertical: 16,
+        alignItems: 'center',
+        shadowColor: GREEN,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+    },
+    confirmDisabled: { backgroundColor: '#cbd5e1', shadowOpacity: 0 },
+    confirmTxt: { color: '#fff', fontWeight: '800', fontSize: 16 },
 });
 
 export default MapAddressPicker;

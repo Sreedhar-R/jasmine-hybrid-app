@@ -22,7 +22,9 @@ const ProductDetailModal = ({ item, visible, onClose, onAddToCart }) => {
             : [];
 
     // Evaluate if the item can be purchased
-    const isAvailable = item.inStock !== false && (item.stock == null || item.stock > 0);
+    const isOutOfStock = (item.stock !== undefined && item.stock !== null) && item.stock <= 0;
+    const isAvailable = (item.inStock !== false) && !isOutOfStock;
+    const maxStock = (item.stock !== undefined && item.stock !== null) ? item.stock : 99;
 
     const imgWidth = Math.min(width, 560) - SIZES.padding * 2;
 
@@ -142,7 +144,9 @@ const ProductDetailModal = ({ item, visible, onClose, onAddToCart }) => {
                                 )}
                                 <View style={[styles.stockBadge, !isAvailable && styles.outOfStockBadge]}>
                                     <Text style={[styles.stockText, !isAvailable && styles.outOfStockText]}>
-                                        {isAvailable ? '✓ In Stock' : '✕ Out of Stock'}
+                                        {isAvailable 
+                                            ? `✓ In Stock${(item.stock !== undefined && item.stock !== null) ? ` (${item.stock})` : ''}` 
+                                            : '✕ Out of Stock'}
                                     </Text>
                                 </View>
                             </View>
@@ -168,8 +172,9 @@ const ProductDetailModal = ({ item, visible, onClose, onAddToCart }) => {
                                     <TouchableOpacity
                                         style={styles.qtyBtn}
                                         onPress={() => setQty(q => q + 1)}
+                                        disabled={qty >= maxStock || !isAvailable}
                                     >
-                                        <Text style={styles.qtyBtnText}>+</Text>
+                                        <Text style={[styles.qtyBtnText, (qty >= maxStock || !isAvailable) && { color: '#ccc' }]}>+</Text>
                                     </TouchableOpacity>
                                 </View>
 
@@ -179,7 +184,7 @@ const ProductDetailModal = ({ item, visible, onClose, onAddToCart }) => {
                                     disabled={!isAvailable}
                                 >
                                     <Text style={styles.addBtnText}>
-                                        {added ? '✓ Added to Cart!' : 'Add to Cart'}
+                                        {isAvailable ? (added ? '✓ Added to Cart!' : 'Add to Cart') : 'Sold Out'}
                                     </Text>
                                 </TouchableOpacity>
                             </View>

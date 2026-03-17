@@ -95,12 +95,14 @@ const AddForm = ({ userId, onSaved, onCancel, saving, setSaving }) => {
     const [errors, setErrors] = useState({});
     const [showMap, setShowMap] = useState(false);
     const [mapCoords, setMapCoords] = useState(null);  // { lat, lng }
+    const [mapUrl, setMapUrl] = useState(null);
 
     const set = (key, val) => { setForm(f => ({ ...f, [key]: val })); setErrors(e => ({ ...e, [key]: undefined })); };
 
-    const handleMapConfirm = ({ address, coords }) => {
+    const handleMapConfirm = ({ address, coords, mapUrl: mUrl }) => {
         setShowMap(false);
         if (coords) setMapCoords(coords);
+        if (mUrl) setMapUrl(mUrl);
         if (address) {
             setForm(f => ({
                 ...f,
@@ -137,6 +139,7 @@ const AddForm = ({ userId, onSaved, onCancel, saving, setSaving }) => {
                 country: form.country,
                 lat: mapCoords.lat,
                 lng: mapCoords.lng,
+                mapUrl: mapUrl,
             });
             onSaved();
         } catch (err) {

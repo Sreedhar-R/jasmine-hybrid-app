@@ -6,7 +6,10 @@ const ProductCard = ({ item, onPress, onAddToCart }) => {
     const [qty, setQty] = useState(1);
     const [added, setAdded] = useState(false);
 
-    const increment = () => setQty(q => q + 1);
+    const isOutOfStock = (item.stock !== undefined && item.stock !== null) && item.stock <= 0;
+    const maxStock = (item.stock !== undefined && item.stock !== null) ? item.stock : 99;
+
+    const increment = () => setQty(q => q < maxStock ? q + 1 : q);
     const decrement = () => setQty(q => (q > 1 ? q - 1 : 1));
 
     const handleAdd = () => {
@@ -30,6 +33,11 @@ const ProductCard = ({ item, onPress, onAddToCart }) => {
                 {Array.isArray(item.images) && item.images.length > 1 && (
                     <View style={styles.multiImageBadge}>
                         <Text style={styles.multiImageBadgeText}>📷 {item.images.length}</Text>
+                    </View>
+                )}
+                {isOutOfStock && (
+                    <View style={styles.soldOutBadge}>
+                        <Text style={styles.soldOutText}>SOLD OUT</Text>
                     </View>
                 )}
             </View>
@@ -59,28 +67,40 @@ const ProductCard = ({ item, onPress, onAddToCart }) => {
                     <Text style={styles.description} numberOfLines={2}>{item.description}</Text>
                 ) : null}
 
-                {/* Unit */}
-                {item.unit ? (
-                    <Text style={styles.unit}>{item.unit}</Text>
-                ) : null}
+                {/* Unit & Stock Status */}
+                <View style={styles.metaRow}>
+                    {item.unit ? <Text style={styles.unit}>{item.unit}</Text> : <View />}
+                    {(item.stock !== undefined && item.stock !== null) && (
+                        <Text style={[styles.stockStatus, isOutOfStock && styles.outOfStock]}>
+                            {isOutOfStock ? 'Out of Stock' : `In Stock (${item.stock})`}
+                        </Text>
+                    )}
+                </View>
 
                 {/* Quantity + Add row */}
                 <View style={styles.actionRow}>
-                    <View style={styles.qtyContainer}>
-                        <TouchableOpacity style={styles.qtyBtn} onPress={decrement}>
+                    <View style={[styles.qtyContainer, isOutOfStock && styles.disabledOp]}>
+                        <TouchableOpacity style={styles.qtyBtn} onPress={decrement} disabled={isOutOfStock}>
                             <Text style={styles.qtyBtnText}>−</Text>
                         </TouchableOpacity>
-                        <Text style={styles.qtyText}>{qty}</Text>
-                        <TouchableOpacity style={styles.qtyBtn} onPress={increment}>
-                            <Text style={styles.qtyBtnText}>+</Text>
+                        <Text style={styles.qtyText}>{isOutOfStock ? 0 : qty}</Text>
+                        <TouchableOpacity 
+                            style={styles.qtyBtn} 
+                            onPress={increment} 
+                            disabled={isOutOfStock || qty >= maxStock}
+                        >
+                            <Text style={[styles.qtyBtnText, (isOutOfStock || qty >= maxStock) && { color: '#ccc' }]}>+</Text>
                         </TouchableOpacity>
                     </View>
 
                     <TouchableOpacity
-                        style={[styles.addBtn, added && styles.addBtnAdded]}
+                        style={[styles.addBtn, added && styles.addBtnAdded, isOutOfStock && styles.addBtnDisabled]}
                         onPress={handleAdd}
+                        disabled={isOutOfStock}
                     >
-                        <Text style={styles.addBtnText}>{added ? '✓ Added!' : 'Add'}</Text>
+                        <Text style={styles.addBtnText}>
+                            {isOutOfStock ? 'Sold Out' : (added ? '✓ Added!' : 'Add')}
+                        </Text>
                     </TouchableOpacity>
                 </View>
             </View>
@@ -228,6 +248,40 @@ const styles = StyleSheet.create({
         color: COLORS.white,
         fontWeight: '700',
         fontSize: SIZES.font,
+    },
+    addBtnDisabled: {
+        backgroundColor: '#E5E7EB',
+    },
+    metaRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginTop: 2,
+    },
+    stockStatus: {
+        fontSize: 10,
+        fontWeight: '700',
+        color: '#059669',
+        textTransform: 'uppercase',
+    },
+    outOfStock: {
+        color: '#DC2626',
+    },
+    soldOutBadge: {
+        position: 'absolute',
+        backgroundColor: 'rgba(220, 38, 38, 0.9)',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 4,
+    },
+    soldOutText: {
+        color: '#fff',
+        fontSize: 12,
+        fontWeight: '900',
+        letterSpacing: 1,
+    },
+    disabledOp: {
+        opacity: 0.5,
     },
 });
 

@@ -65,7 +65,12 @@ const CartRow = ({ item }) => {
             {/* Name + unit */}
             <View style={rowStyle.nameCol}>
                 <Text style={rowStyle.name} numberOfLines={2}>{item.name}</Text>
-                {item.unit ? <Text style={rowStyle.unit}>Qty: {item.unit}</Text> : null}
+                <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', marginTop: 3 }}>
+                    {item.unit ? <Text style={rowStyle.unit}>{item.unit}</Text> : null}
+                    {(item.stock !== undefined && item.stock !== null) && item.qty >= item.stock && (
+                        <Text style={rowStyle.stockWarn}>Max Stock Reached</Text>
+                    )}
+                </View>
             </View>
 
             {/* Unit price */}
@@ -75,8 +80,12 @@ const CartRow = ({ item }) => {
             <View style={rowStyle.stepper}>
                 <Text style={rowStyle.stepperVal}>{item.qty}</Text>
                 <View style={rowStyle.stepperBtns}>
-                    <TouchableOpacity style={rowStyle.stepBtn} onPress={() => updateQty(item.id, 1)}>
-                        <Text style={rowStyle.stepBtnText}>▲</Text>
+                    <TouchableOpacity 
+                        style={rowStyle.stepBtn} 
+                        onPress={() => updateQty(item.id, 1)}
+                        disabled={(item.stock !== undefined && item.stock !== null) && item.qty >= item.stock}
+                    >
+                        <Text style={[rowStyle.stepBtnText, (item.stock !== undefined && item.stock !== null) && item.qty >= item.stock && { color: '#ccc' }]}>▲</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={rowStyle.stepBtn} onPress={() => updateQty(item.id, -1)}>
                         <Text style={rowStyle.stepBtnText}>▼</Text>
@@ -111,6 +120,7 @@ const rowStyle = StyleSheet.create({
     stepBtnText: { fontSize: 8, color: COLORS.black },
     removeBtn: { width: 36, alignItems: 'center' },
     removeIcon: { fontSize: 16, color: COLORS.gray },
+    stockWarn: { fontSize: 10, color: '#C0392B', fontWeight: '700' },
 });
 
 // ── Main Screen ───────────────────────────────────────────────────────────────

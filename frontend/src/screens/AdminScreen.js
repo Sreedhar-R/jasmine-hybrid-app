@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
     View, Text, ScrollView, TouchableOpacity, StyleSheet,
     SafeAreaView, Modal, TextInput, ActivityIndicator,
-    Switch, Platform, Alert, Image,
+    Switch, Platform, Alert, Image, Linking,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import Header from '../components/Header';
@@ -437,8 +437,22 @@ const OrdersTab = () => {
                                         </View>
                                         <View style={adm.metaBlock}>
                                             {o.paymentMethod ? <Text style={adm.metaTxt}>💳 {o.paymentMethod}</Text> : null}
-                                            {addrStr !== '—' ? <Text style={adm.metaTxt}>📍 {addrStr}</Text> : null}
+                                            {addrStr !== '—' ? (
+                                                <View style={{ gap: 4 }}>
+                                                    <Text style={adm.metaTxt}>📍 {addrStr}</Text>
+                                                    {addr?.mapUrl ? (
+                                                        <TouchableOpacity onPress={() => Linking.openURL(addr.mapUrl)} style={adm.mapLink}>
+                                                            <Text style={adm.mapLinkTxt}>🗺️ View on Google Maps</Text>
+                                                        </TouchableOpacity>
+                                                    ) : null}
+                                                </View>
+                                            ) : null}
                                             {o.razorpayOrderId ? <Text style={adm.metaTxt}>🆔 {o.razorpayOrderId}</Text> : null}
+                                            {o.bookingFor ? (
+                                                <Text style={[adm.metaTxt, { color: P.warn, fontWeight: '700' }]}>
+                                                    👤 For: {o.bookingFor.name} ({o.bookingFor.phone})
+                                                </Text>
+                                            ) : null}
                                         </View>
                                     </View>
                                 )}
@@ -747,6 +761,8 @@ const adm = StyleSheet.create({
     detailPrice: { fontSize: 13, color: P.text, minWidth: 50, textAlign: 'right' },
     metaBlock: { marginTop: 8, gap: 4 },
     metaTxt: { fontSize: 12, color: P.subtle },
+    mapLink: { alignSelf: 'flex-start', backgroundColor: '#E0F2FE', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, marginTop: 4, borderWidth: 1, borderColor: '#BAE6FD' },
+    mapLinkTxt: { fontSize: 12, color: '#0369A1', fontWeight: '700' },
     expandHint: { fontSize: 11, color: P.primary, textAlign: 'center', marginTop: 10, fontWeight: '600' },
 
     // CRUD shared

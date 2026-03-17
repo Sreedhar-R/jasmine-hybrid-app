@@ -414,11 +414,32 @@ from models import OrderCreate
 
 @app.post("/orders", status_code=201)
 def create_order(data: OrderCreate):
+    # ── Verify stock availability first ─────────────────────────────────────
+    unavailable = []
+    for item in data.items:
+        p = get_document("products", item.productId)
+        if not p:
+            unavailable.append(f"{item.name} (Not found)")
+            continue
+        
+        stock = p.get("stock")
+        if stock is None:
+            continue  # ignore items without stock tracking
+            
+        if stock < item.qty:
+            unavailable.append(f"{item.name} (Only {stock} available)")
+
+    if unavailable:
+        raise HTTPException(
+            status_code=422, 
+            detail=f"Some items are out of stock: {', '.join(unavailable)}"
+        )
+
+    # ── Stock is available, proceed ─────────────────────────────────────────
     payload = data.model_dump()
     payload["createdAt"] = _now()
     payload["updatedAt"] = _now()
 
-    # Serialise address snapshot (it's a Pydantic sub-model, now a dict)
     order_id = create_document("orders", payload)
 
     # Optionally save address for the user if they're logged in
@@ -435,6 +456,9 @@ def create_order(data: OrderCreate):
             "state":     addr["state"],
             "zipCode":   addr["zipCode"],
             "country":   addr.get("country", "India"),
+            "lat":       addr.get("lat"),
+            "lng":       addr.get("lng"),
+            "mapUrl":    addr.get("mapUrl"),
             "isPrimary": is_primary,
             "createdAt": _now(),
         })
