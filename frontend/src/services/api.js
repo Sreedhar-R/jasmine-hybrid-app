@@ -5,18 +5,20 @@
 
 // Determine if we are running locally or if this is the deployed production build
 const isLocal = typeof window !== 'undefined' &&
-    (window.location.hostname === 'localhost' || 
-     window.location.hostname === '127.0.0.1' ||
-     window.location.hostname.startsWith('192.168.') ||
-     window.location.hostname.startsWith('10.') ||
-     window.location.hostname.startsWith('172.'));
+    (window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname.startsWith('192.168.') ||
+        window.location.hostname.startsWith('10.') ||
+        window.location.hostname.startsWith('172.'));
 
 // Base URL points to local dev server or live Cloud Run backend
 // If using Expo Go on a physical device, 'localhost' won't work to reach your computer.
 // Change localhost here to your computer's actual local IP if testing on a real phone!
-const BASE_URL = isLocal
-    ? `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:8080`
-    : 'https://jasmine-backend-331312100274.us-central1.run.app';
+// const BASE_URL = isLocal
+//     ? `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:8080`
+//     : 'https://jasmine-backend-331312100274.us-central1.run.app';
+
+const BASE_URL = 'https://jasmine-backend-331312100274.us-central1.run.app';
 
 async function apiFetch(path, options = {}) {
     try {
