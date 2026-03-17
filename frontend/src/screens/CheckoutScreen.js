@@ -74,11 +74,13 @@ const addrS = StyleSheet.create({
 const OrderSummary = ({ items, subtotal, discount, shipping, discountCode, setDiscountCode, onApply }) => (
     <View style={sumS.wrap}>
         {/* Items */}
-        {items.map((item) => (
+        {items.map((item) => {
+            const displayImage = Array.isArray(item.images) && item.images.length > 0 ? item.images[0] : item.image;
+            return (
             <View key={item.id} style={sumS.itemRow}>
                 <View style={sumS.imgWrap}>
-                    {item.image
-                        ? <Image source={{ uri: item.image }} style={sumS.img} resizeMode="contain" />
+                    {displayImage
+                        ? <Image source={{ uri: displayImage }} style={sumS.img} resizeMode="contain" />
                         : <Text style={{ fontSize: 24 }}>{item.emoji ?? '🛒'}</Text>
                     }
                     <View style={sumS.badge}><Text style={sumS.badgeTxt}>{item.qty}</Text></View>
@@ -89,7 +91,8 @@ const OrderSummary = ({ items, subtotal, discount, shipping, discountCode, setDi
                 </View>
                 <Text style={sumS.price}>₹{(item.price * item.qty).toFixed(2)}</Text>
             </View>
-        ))}
+            );
+        })}
 
         <View style={sumS.divider} />
 
@@ -554,6 +557,14 @@ const CheckoutScreen = ({ navigation }) => {
                 }
             </TouchableOpacity>
 
+            {/* ── Shop more items button ── */}
+            <TouchableOpacity
+                style={styles.shopMoreBtn}
+                onPress={() => navigation.navigate('Tabs', { screen: 'Home' })}
+            >
+                <Text style={styles.shopMoreTxt}>← Shop more items</Text>
+            </TouchableOpacity>
+
             {/* Booking for someone else banner */}
             {bookingFor && (
                 <View style={styles.bookingBanner}>
@@ -630,6 +641,16 @@ const styles = StyleSheet.create({
     payBtn: { backgroundColor: GREEN, borderRadius: 8, paddingVertical: 18, alignItems: 'center', marginTop: 24 },
     payBtnDisabled: { opacity: 0.6 },
     payTxt: { color: '#FFF', fontWeight: '700', fontSize: 17 },
+    shopMoreBtn: { 
+        backgroundColor: '#F0F7F4', 
+        borderRadius: 8, 
+        paddingVertical: 16, 
+        alignItems: 'center', 
+        marginTop: 12,
+        borderWidth: 1,
+        borderColor: GREEN,
+    },
+    shopMoreTxt: { color: GREEN, fontWeight: '700', fontSize: 16 },
     mapPickBtn: {
         backgroundColor: '#E8F4F8',
         borderRadius: 6,

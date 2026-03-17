@@ -13,10 +13,12 @@ const Header = () => {
 
     return (
         <View style={styles.container}>
-            {/* Logo — taps to Home */}
-            <TouchableOpacity onPress={() => navigation.navigate('Tabs', { screen: 'Home' })}>
-                <Image source={require('../../assets/logo.png')} style={styles.logoImage} />
-            </TouchableOpacity>
+            <View style={styles.leftSection}>
+                {/* Logo — taps to Home */}
+                <TouchableOpacity onPress={() => navigation.navigate('Tabs', { screen: 'Home' })}>
+                    <Image source={require('../../assets/logo.png')} style={styles.logoImage} />
+                </TouchableOpacity>
+            </View>
 
             {/* Search bar */}
             <View style={styles.searchContainer}>
@@ -75,6 +77,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
     },
+    leftSection: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+
     logoImage: {
         height: 36,
         width: 140,

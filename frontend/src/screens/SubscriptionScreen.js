@@ -196,8 +196,8 @@ const SubscribeModal = ({ visible, product, userId, onClose, onSuccess }) => {
                         {/* Product preview */}
                         <View style={mdl.productRow}>
                             <View style={mdl.imgWrap}>
-                                {product.image
-                                    ? <Image source={{ uri: product.image }} style={mdl.img} resizeMode="contain" />
+                                {(Array.isArray(product.images) && product.images.length > 0 ? product.images[0] : product.image)
+                                    ? <Image source={{ uri: Array.isArray(product.images) && product.images.length > 0 ? product.images[0] : product.image }} style={mdl.img} resizeMode="contain" />
                                     : <Text style={{ fontSize: 32 }}>🛆</Text>
                                 }
                             </View>
@@ -560,11 +560,13 @@ const mdl = StyleSheet.create({
 });
 
 // ── Subscribable Product Card ─────────────────────────────────────────────────
-const ProductCard = ({ product, onSubscribe }) => (
+const ProductCard = ({ product, onSubscribe }) => {
+    const displayImage = Array.isArray(product.images) && product.images.length > 0 ? product.images[0] : product.image;
+    return (
     <View style={pc.card}>
         <View style={pc.imgWrap}>
-            {product.image
-                ? <Image source={{ uri: product.image }} style={pc.img} resizeMode="contain" />
+            {displayImage
+                ? <Image source={{ uri: displayImage }} style={pc.img} resizeMode="contain" />
                 : <Text style={{ fontSize: 40 }}>🛆</Text>
             }
             {product.subscriptionBadge && (
@@ -590,7 +592,8 @@ const ProductCard = ({ product, onSubscribe }) => (
             <Text style={pc.subscribeTxt}>📅 Subscribe</Text>
         </TouchableOpacity>
     </View>
-);
+    );
+};
 
 const pc = StyleSheet.create({
     card: { backgroundColor: '#fff', borderRadius: 14, marginBottom: 12, flexDirection: 'row', alignItems: 'center', padding: 14, borderWidth: 1, borderColor: '#EBEBEB', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 6, elevation: 2, gap: 12 },
@@ -888,6 +891,14 @@ const SubscriptionScreen = () => {
                 {products.map(p => (
                     <ProductCard key={p.id} product={p} onSubscribe={handleSubscribePress} />
                 ))}
+                
+                {/* ── Shop more items button ── */}
+                <TouchableOpacity
+                    style={styles.shopMoreBtn}
+                    onPress={() => navigation.navigate('Tabs', { screen: 'Home' })}
+                >
+                    <Text style={styles.shopMoreTxt}>← Shop more items</Text>
+                </TouchableOpacity>
             </ScrollView>
         );
     };
@@ -945,6 +956,14 @@ const SubscriptionScreen = () => {
                         {cancelled.map(s => <SubCard key={s.id} sub={s} onPause={handlePause} onResume={handleResume} onCancel={handleCancel} />)}
                     </>
                 )}
+
+                {/* ── Shop more items button ── */}
+                <TouchableOpacity
+                    style={styles.shopMoreBtn}
+                    onPress={() => navigation.navigate('Tabs', { screen: 'Home' })}
+                >
+                    <Text style={styles.shopMoreTxt}>← Shop more items</Text>
+                </TouchableOpacity>
             </ScrollView>
         );
     };
@@ -1049,6 +1068,16 @@ const styles = StyleSheet.create({
     emptySub: { fontSize: 14, color: COLORS.gray, textAlign: 'center', lineHeight: 22 },
     browseBtn: { marginTop: 20, backgroundColor: GREEN, borderRadius: 10, paddingHorizontal: 24, paddingVertical: 12 },
     browseTxt: { color: '#fff', fontWeight: '700', fontSize: 14 },
+    shopMoreBtn: { 
+        backgroundColor: '#F0F7F4', 
+        borderRadius: 8, 
+        paddingVertical: 16, 
+        alignItems: 'center', 
+        marginTop: 12,
+        borderWidth: 1,
+        borderColor: GREEN,
+    },
+    shopMoreTxt: { color: GREEN, fontWeight: '700', fontSize: 16 },
 });
 
 export default SubscriptionScreen;

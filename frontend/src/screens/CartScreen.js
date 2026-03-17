@@ -50,13 +50,14 @@ const emptyStyle = StyleSheet.create({
 const CartRow = ({ item }) => {
     const { updateQty, removeItem } = useCart();
     const rowTotal = (item.price ?? 0) * item.qty;
+    const displayImage = Array.isArray(item.images) && item.images.length > 0 ? item.images[0] : item.image;
 
     return (
         <View style={rowStyle.row}>
             {/* Product image */}
             <View style={rowStyle.imgWrap}>
-                {item.image
-                    ? <Image source={{ uri: item.image }} style={rowStyle.img} resizeMode="contain" />
+                {displayImage
+                    ? <Image source={{ uri: displayImage }} style={rowStyle.img} resizeMode="contain" />
                     : <Text style={rowStyle.emoji}>{item.emoji ?? '🛒'}</Text>
                 }
             </View>

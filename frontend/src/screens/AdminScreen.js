@@ -13,6 +13,8 @@ import {
     createCategory, updateCategory, deleteCategory,
     createBanner, updateBanner,
 } from '../services/api';
+import * as ImagePicker from 'expo-image-picker';
+import { uploadImageToFirebase } from '../services/uploadImage';
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 const P = {
@@ -78,20 +80,20 @@ const FORM_CONFIG = {
         { key: 'unit', label: 'Unit (e.g. 1kg)' },
         { key: 'categories', label: 'Categories (comma-separated)' },
         { key: 'description', label: 'Description', multiline: true },
-        { key: 'images', label: 'Images (comma-separated URLs)', multiline: true },
+        { key: 'images', label: 'Product Images', isImage: true, multiple: true },
         { key: 'stock', label: 'Stock qty', numeric: true },
         { key: 'subscriptionAvailable', label: 'Available for Subscription', toggle: true },
     ],
     category: [
         { key: 'name', label: 'Category Name', required: true },
         { key: 'emoji', label: 'Emoji' },
-        { key: 'image', label: 'Image URL' },
+        { key: 'image', label: 'Category Image', isImage: true, multiple: false },
         { key: 'order', label: 'Display Order', numeric: true },
     ],
     banner: [
         { key: 'title', label: 'Title', required: true },
         { key: 'subtitle', label: 'Subtitle' },
-        { key: 'image', label: 'Image URL (or emoji)' },
+        { key: 'image', label: 'Banner Image', isImage: true, multiple: false },
         { key: 'order', label: 'Display Order', numeric: true },
         { key: 'active', label: 'Active', toggle: true },
     ],
@@ -102,17 +104,31 @@ const EntityForm = ({ visible, entity, type, onClose, onSave }) => {
     const fields = FORM_CONFIG[type] || [];
     const [form, setForm] = useState({});
     const [saving, setSaving] = useState(false);
+    const [uploadingImage, setUploadingImage] = useState(false);
 
     useEffect(() => {
         if (!visible) return;
         const init = {};
         fields.forEach(f => {
             let val = entity ? (entity[f.key] ?? (f.toggle ? false : '')) : (f.toggle ? false : '');
-            if ((f.key === 'categories' || f.key === 'images') && entity) {
+            
+            // Handle arrays to comma-separated strings for categories
+            if (f.key === 'categories' && entity) {
                 if (Array.isArray(entity[f.key])) val = entity[f.key].join(', ');
-                else if (f.key === 'categories' && entity.category) val = entity.category;
-                else if (f.key === 'images' && entity.image) val = entity.image;
+                else if (entity.category) val = entity.category;
             }
+            
+            // Handle images
+            if (f.isImage) {
+                if (f.multiple) {
+                    if (entity && Array.isArray(entity[f.key])) val = [...entity[f.key]];
+                    else if (entity && entity.image) val = [entity.image];
+                    else val = [];
+                } else {
+                    val = entity ? (entity[f.key] || '') : '';
+                }
+            }
+
             if (f.key === 'basePrice' && entity) {
                 val = entity.originalPrice || entity.price || '';
             }
@@ -126,6 +142,45 @@ const EntityForm = ({ visible, entity, type, onClose, onSave }) => {
 
     const set = (key, val) => setForm(p => ({ ...p, [key]: val }));
 
+    const handlePickImage = async (fieldKey, multiple) => {
+        try {
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: !multiple, // Editing usually disabled for multiple
+                quality: 0.8,
+            });
+
+            if (!result.canceled && result.assets && result.assets.length > 0) {
+                setUploadingImage(true);
+                const uri = result.assets[0].uri;
+                
+                // Upload to Firebase
+                const downloadUrl = await uploadImageToFirebase(uri, type === 'product' ? 'products' : 'misc');
+                
+                if (multiple) {
+                    setForm(p => ({ ...p, [fieldKey]: [...(p[fieldKey] || []), downloadUrl] }));
+                } else {
+                    set(fieldKey, downloadUrl);
+                }
+            }
+        } catch (error) {
+            Alert.alert('Upload Failed', error.message);
+        } finally {
+            setUploadingImage(false);
+        }
+    };
+
+    const handleRemoveImage = (fieldKey, index, multiple) => {
+        if (multiple) {
+            setForm(p => ({
+                ...p,
+                [fieldKey]: p[fieldKey].filter((_, i) => i !== index),
+            }));
+        } else {
+            set(fieldKey, '');
+        }
+    };
+
     const handleSave = async () => {
         const missing = fields.filter(f => f.required && !form[f.key]);
         if (missing.length) {
@@ -138,7 +193,7 @@ const EntityForm = ({ visible, entity, type, onClose, onSave }) => {
             if (f.numeric && payload[f.key] !== '' && payload[f.key] !== undefined) {
                 payload[f.key] = Number(payload[f.key]);
             }
-            if ((f.key === 'categories' || f.key === 'images') && typeof payload[f.key] === 'string') {
+            if (f.key === 'categories' && typeof payload[f.key] === 'string') {
                 payload[f.key] = payload[f.key].split(',').map(s => s.trim()).filter(Boolean);
             }
         });
@@ -204,6 +259,41 @@ const EntityForm = ({ visible, entity, type, onClose, onSave }) => {
                                         trackColor={{ true: P.primary }}
                                         thumbColor={form[f.key] ? '#fff' : '#f4f3f4'}
                                     />
+                                ) : f.isImage ? (
+                                    <View>
+                                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 4 }}>
+                                            {f.multiple ? (
+                                                (form[f.key] || []).map((imgUri, idx) => (
+                                                    <View key={idx} style={{ position: 'relative' }}>
+                                                        <Image source={{ uri: imgUri }} style={frm.imgThumb} />
+                                                        <TouchableOpacity style={frm.imgRemove} onPress={() => handleRemoveImage(f.key, idx, true)}>
+                                                            <Text style={frm.imgRemoveTxt}>✕</Text>
+                                                        </TouchableOpacity>
+                                                    </View>
+                                                ))
+                                            ) : (
+                                                form[f.key] ? (
+                                                    <View style={{ position: 'relative' }}>
+                                                        <Image source={{ uri: form[f.key] }} style={frm.imgThumb} />
+                                                        <TouchableOpacity style={frm.imgRemove} onPress={() => handleRemoveImage(f.key, 0, false)}>
+                                                            <Text style={frm.imgRemoveTxt}>✕</Text>
+                                                        </TouchableOpacity>
+                                                    </View>
+                                                ) : null
+                                            )}
+                                            
+                                            {/* Plus button to upload */}
+                                            {(!f.multiple && form[f.key]) ? null : (
+                                                <TouchableOpacity 
+                                                    style={frm.imgUploadBtn} 
+                                                    onPress={() => handlePickImage(f.key, f.multiple)}
+                                                    disabled={uploadingImage}
+                                                >
+                                                    {uploadingImage ? <ActivityIndicator color={P.subtle} /> : <Text style={frm.imgUploadPlus}>+</Text>}
+                                                </TouchableOpacity>
+                                            )}
+                                        </View>
+                                    </View>
                                 ) : (
                                     <TextInput
                                         style={[frm.input, f.multiline && frm.inputMulti]}
@@ -699,4 +789,9 @@ const frm = StyleSheet.create({
     cancelTxt: { color: '#4B5563', fontWeight: '700', fontSize: 15 },
     saveBtn: { flex: 1, backgroundColor: '#2D6A4F', borderRadius: 12, padding: 14, alignItems: 'center' },
     saveTxt: { color: '#fff', fontWeight: '800', fontSize: 15 },
+    imgUploadBtn: { width: 70, height: 70, borderRadius: 12, backgroundColor: '#EEF2EE', borderWidth: 2, borderColor: '#D1FAE5', borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center' },
+    imgUploadPlus: { fontSize: 28, color: P.subtle },
+    imgThumb: { width: 70, height: 70, borderRadius: 12, backgroundColor: '#FAFAFA', borderWidth: 1, borderColor: P.border },
+    imgRemove: { position: 'absolute', top: -6, right: -6, backgroundColor: P.danger, width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+    imgRemoveTxt: { color: '#fff', fontSize: 10, fontWeight: '900' },
 });
