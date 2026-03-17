@@ -1,105 +1,36 @@
 /**
  * MapAddressPicker.web.js
- * Web-only implementation using Leaflet.js in an iframe.
- * Communicates via postMessage bridge.
+ * Web implementation using @react-google-maps/api.
  */
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
     Modal, View, Text, TouchableOpacity, TextInput,
     StyleSheet, ActivityIndicator, ScrollView,
 } from 'react-native';
+import { GoogleMap, useJsApiLoader, Marker } from '@react-google-maps/api';
 
 const GREEN = '#1B4332';
 const DEFAULT_LAT = 12.9716;   // Bengaluru
 const DEFAULT_LNG = 77.5946;
 
-// ── Leaflet HTML injected into the iframe ─────────────────────────────────────
-const buildLeafletHTML = (lat, lng) => `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <style>
-    * { margin:0; padding:0; box-sizing:border-box; }
-    html, body, #map { width:100%; height:100%; }
-    .pin-hint {
-      position:absolute; bottom:8px; left:50%; transform:translateX(-50%);
-      background:rgba(0,0,0,0.6); color:#fff; font-size:12px;
-      padding:4px 12px; border-radius:12px; z-index:1000; pointer-events:none;
-    }
-  </style>
-</head>
-<body>
-  <div id="map"></div>
-  <div class="pin-hint">Tap map or drag pin to set location</div>
-  <script>
-    var lat = ${lat}, lng = ${lng};
-    var map = L.map('map', { zoomControl: true }).setView([lat, lng], 14);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '© OpenStreetMap'
-    }).addTo(map);
+// Fallback to the Firebase API Key which usually has Maps enabled
+const GOOGLE_MAPS_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || 
+                           process.env.EXPO_PUBLIC_FIREBASE_API_KEY || 
+                           "AIzaSyBNXzm_REKtMBnApgHu71S7E2rI1e3lj50";
 
-    var icon = L.divIcon({
-      html: '<div style="font-size:32px;line-height:1;margin-top:-32px;margin-left:-12px;">📍</div>',
-      className: '', iconSize: [24, 32], iconAnchor: [12, 32]
-    });
+const MAP_CONTAINER_STYLE = {
+    width: '100%',
+    height: '100%',
+};
 
-    var marker = L.marker([lat, lng], { draggable: true, icon: icon }).addTo(map);
+const LIBRARIES = ['places'];
 
-    function send(la, ln) {
-      window.parent.postMessage(JSON.stringify({ type: 'coords', lat: la, lng: ln }), '*');
-    }
-
-    marker.on('dragend', function(e) {
-      var p = e.target.getLatLng();
-      send(p.lat, p.lng);
-    });
-
-    map.on('click', function(e) {
-      marker.setLatLng(e.latlng);
-      send(e.latlng.lat, e.latlng.lng);
-    });
-
-    window.addEventListener('message', function(e) {
-      try {
-        var d = JSON.parse(e.data);
-        if (d.type === 'move') {
-          marker.setLatLng([d.lat, d.lng]);
-          map.setView([d.lat, d.lng], 16, { animate: true });
-          send(d.lat, d.lng);
-        }
-      } catch(_) {}
-    });
-  </script>
-</body>
-</html>`;
-
-// ── Nominatim reverse geocode ─────────────────────────────────────────────────
-async function reverseGeocode(lat, lng) {
-    const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1`;
-    const res = await fetch(url, {
-        headers: { 'Accept-Language': 'en', 'User-Agent': 'BloomApp/1.0' },
-    });
-    return res.json();
-}
-
-function parseAddress(geo) {
-    if (!geo?.address) return null;
-    const a = geo.address;
-    const road = [a.house_number, a.road].filter(Boolean).join(' ');
-    const street = road || a.suburb || a.neighbourhood || a.quarter || '';
-    const city = a.city || a.town || a.village || a.county || '';
-    const state = a.state || '';
-    const zipCode = a.postcode || '';
-    const country = a.country || 'India';
-    return { street, city, state, zipCode, country };
-}
-
-// ── Component ─────────────────────────────────────────────────────────────────
 const MapAddressPicker = ({ visible, onClose, onConfirm }) => {
-    const iframeRef = useRef(null);
+    const { isLoaded, loadError } = useJsApiLoader({
+        id: 'google-map-script',
+        googleMapsApiKey: GOOGLE_MAPS_API_KEY,
+        libraries: LIBRARIES,
+    });
 
     const [coords, setCoords] = useState({ lat: DEFAULT_LAT, lng: DEFAULT_LNG });
     const [parsedAddr, setParsedAddr] = useState(null);
@@ -111,35 +42,49 @@ const MapAddressPicker = ({ visible, onClose, onConfirm }) => {
     const [forSomeoneElse, setForSomeoneElse] = useState(false);
     const [recipient, setRecipient] = useState({ name: '', phone: '' });
 
-    // Listen to postMessage from iframe
+    const reverseGeocode = useCallback((lat, lng) => {
+        if (!window.google) return;
+        setGeocoding(true);
+        const geocoder = new window.google.maps.Geocoder();
+        geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+            if (status === 'OK' && results[0]) {
+                const addr = results[0].address_components;
+                const getComp = (type) => addr.find(c => c.types.includes(type))?.long_name || '';
+                
+                setParsedAddr({
+                    street: results[0].formatted_address.split(',')[0] || getComp('route'),
+                    city: getComp('locality') || getComp('administrative_area_level_2'),
+                    state: getComp('administrative_area_level_1'),
+                    zipCode: getComp('postal_code'),
+                    country: getComp('country') || 'India',
+                });
+            } else {
+                console.error('Geocode failed:', status);
+            }
+            setGeocoding(false);
+        });
+    }, []);
+
+    // Reverse geocode on open or when coords change externally
     useEffect(() => {
-        if (!visible) return;
+        if (visible && isLoaded) {
+            reverseGeocode(coords.lat, coords.lng);
+        }
+    }, [visible, isLoaded, reverseGeocode]);
 
-        const handler = async (e) => {
-            try {
-                const data = JSON.parse(e.data);
-                if (data.type !== 'coords') return;
-                const { lat, lng } = data;
-                setCoords({ lat, lng });
-                setGeocoding(true);
-                setParsedAddr(null);
-                try {
-                    const geo = await reverseGeocode(lat, lng);
-                    setParsedAddr(parseAddress(geo));
-                } catch (_) { }
-                setGeocoding(false);
-            } catch (_) { }
-        };
+    const onMapClick = useCallback((e) => {
+        const lat = e.latLng.lat();
+        const lng = e.latLng.lng();
+        setCoords({ lat, lng });
+        reverseGeocode(lat, lng);
+    }, [reverseGeocode]);
 
-        window.addEventListener('message', handler);
-        return () => window.removeEventListener('message', handler);
-    }, [visible]);
-
-    const moveMarker = (lat, lng) => {
-        iframeRef.current?.contentWindow?.postMessage(
-            JSON.stringify({ type: 'move', lat, lng }), '*'
-        );
-    };
+    const onMarkerDragEnd = useCallback((e) => {
+        const lat = e.latLng.lat();
+        const lng = e.latLng.lng();
+        setCoords({ lat, lng });
+        reverseGeocode(lat, lng);
+    }, [reverseGeocode]);
 
     const useMyLocation = () => {
         setLocError('');
@@ -149,25 +94,18 @@ const MapAddressPicker = ({ visible, onClose, onConfirm }) => {
         }
         setLocLoading(true);
         navigator.geolocation.getCurrentPosition(
-            async (pos) => {
+            (pos) => {
                 const { latitude: lat, longitude: lng } = pos.coords;
                 setCoords({ lat, lng });
-                moveMarker(lat, lng);
-                setGeocoding(true);
-                setParsedAddr(null);
-                try {
-                    const geo = await reverseGeocode(lat, lng);
-                    setParsedAddr(parseAddress(geo));
-                } catch (_) { }
-                setGeocoding(false);
+                reverseGeocode(lat, lng);
                 setLocLoading(false);
             },
             (err) => {
                 setLocLoading(false);
                 if (err.code === 1) {
-                    setLocError('Location access denied. Allow location in browser settings and try again.');
+                    setLocError('Location access denied. Allow location in browser settings.');
                 } else {
-                    setLocError('Could not get your location. Please try again.');
+                    setLocError('Could not get your location.');
                 }
             },
             { enableHighAccuracy: true, timeout: 12000 }
@@ -207,16 +145,40 @@ const MapAddressPicker = ({ visible, onClose, onConfirm }) => {
                     </View>
 
                     <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
-                        {/* Map iframe */}
+                        {/* Map Container */}
                         <View style={s.mapWrap}>
-                            {/* eslint-disable-next-line react/no-unknown-property */}
-                            <iframe
-                                ref={iframeRef}
-                                srcDoc={buildLeafletHTML(coords.lat, coords.lng)}
-                                style={{ width: '100%', height: '100%', border: 'none' }}
-                                sandbox="allow-scripts allow-same-origin"
-                                title="delivery-map"
-                            />
+                            {isLoaded ? (
+                                <GoogleMap
+                                    mapContainerStyle={MAP_CONTAINER_STYLE}
+                                    center={coords}
+                                    zoom={15}
+                                    onClick={onMapClick}
+                                    options={{
+                                        disableDefaultUI: false,
+                                        zoomControl: true,
+                                        mapTypeControl: false,
+                                        streetViewControl: false,
+                                        fullscreenControl: false,
+                                    }}
+                                >
+                                    <Marker 
+                                        position={coords} 
+                                        draggable={true} 
+                                        onDragEnd={onMarkerDragEnd}
+                                        animation={window.google?.maps.Animation.DROP}
+                                    />
+                                </GoogleMap>
+                            ) : (
+                                <View style={s.mapLoading}>
+                                    <ActivityIndicator size="large" color={GREEN} />
+                                    {loadError && (
+                                        <Text style={s.loadError}>
+                                            Map Load Error. Check API Key or Internet.
+                                        </Text>
+                                    )}
+                                    <Text style={s.addrHint}>Loading Google Maps...</Text>
+                                </View>
+                            )}
                         </View>
 
                         {/* Use my location */}
@@ -359,7 +321,19 @@ const s = StyleSheet.create({
     mapWrap: {
         width: '100%',
         height: 320,
-        backgroundColor: '#e8e8e8',
+        backgroundColor: '#f5f5f5',
+    },
+    mapLoading: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        gap: 12,
+    },
+    loadError: {
+        color: '#C0392B',
+        fontSize: 12,
+        textAlign: 'center',
+        paddingHorizontal: 40,
     },
 
     // Location button
