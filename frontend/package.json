@@ -6,7 +6,9 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "build": "npx expo export -p web",
+    "deploy": "npm run build && npx firebase deploy --only hosting"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",
@@ -25,5 +27,8 @@
     "react-native-vector-icons": "^10.3.0",
     "react-native-web": "^0.21.0"
   },
-  "private": true
+  "private": true,
+  "devDependencies": {
+    "firebase-tools": "^15.10.1"
+  }
 }
