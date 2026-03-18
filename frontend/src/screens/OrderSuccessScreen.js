@@ -30,7 +30,7 @@ const OrderSuccessScreen = ({ navigation, route }) => {
                 )}
                 <TouchableOpacity
                     style={styles.btn}
-                    onPress={() => navigation.navigate('Tabs', { screen: 'Home' })}
+                    onPress={() => navigation.navigate('Tabs', { screen: 'Jasmine' })}
                 >
                     <Text style={styles.btnTxt}>Continue Shopping →</Text>
                 </TouchableOpacity>

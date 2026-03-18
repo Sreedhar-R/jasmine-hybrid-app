@@ -895,7 +895,7 @@ const SubscriptionScreen = () => {
                 {/* ── Shop more items button ── */}
                 <TouchableOpacity
                     style={styles.shopMoreBtn}
-                    onPress={() => navigation.navigate('Tabs', { screen: 'Home' })}
+                    onPress={() => navigation.navigate('Tabs', { screen: 'Jasmine' })}
                 >
                     <Text style={styles.shopMoreTxt}>← Shop more items</Text>
                 </TouchableOpacity>
@@ -960,7 +960,7 @@ const SubscriptionScreen = () => {
                 {/* ── Shop more items button ── */}
                 <TouchableOpacity
                     style={styles.shopMoreBtn}
-                    onPress={() => navigation.navigate('Tabs', { screen: 'Home' })}
+                    onPress={() => navigation.navigate('Tabs', { screen: 'Jasmine' })}
                 >
                     <Text style={styles.shopMoreTxt}>← Shop more items</Text>
                 </TouchableOpacity>

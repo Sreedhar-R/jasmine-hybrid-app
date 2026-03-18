@@ -20,7 +20,7 @@ const EmptyCart = () => {
             <Text style={emptyStyle.title}>Your cart is empty</Text>
             <TouchableOpacity
                 style={emptyStyle.btn}
-                onPress={() => navigation.navigate('Tabs', { screen: 'Home' })}
+                onPress={() => navigation.navigate('Tabs', { screen: 'Jasmine' })}
             >
                 <Text style={emptyStyle.btnText}>Continue shopping</Text>
             </TouchableOpacity>
@@ -182,7 +182,7 @@ const CartScreen = () => {
                     {/* Continue shopping */}
                     <TouchableOpacity
                         style={styles.continueBtn}
-                        onPress={() => navigation.navigate('Tabs', { screen: 'Home' })}
+                        onPress={() => navigation.navigate('Tabs', { screen: 'Jasmine' })}
                     >
                         <Text style={styles.continueBtnText}>← Continue shopping</Text>
                     </TouchableOpacity>

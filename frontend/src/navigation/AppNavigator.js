@@ -42,7 +42,7 @@ const TabNavigator = () => {
                 tabBarInactiveTintColor: COLORS.gray,
                 tabBarIcon: ({ color }) => {
                     const icons = {
-                        Home: '🏠',
+                        Jasmine: '🌸',
                         Subscription: '📅',
                         Cart: '🛒',
                         Profile: '👤',
@@ -51,7 +51,7 @@ const TabNavigator = () => {
                 },
             })}
         >
-            <Tab.Screen name="Home" component={HomeScreen} />
+            <Tab.Screen name="Jasmine" component={HomeScreen} />
             <Tab.Screen name="Subscription" component={SubscriptionScreen} />
             <Tab.Screen name="Cart" component={CartScreen} />
             <Tab.Screen name="Profile" component={ProfileTab} />

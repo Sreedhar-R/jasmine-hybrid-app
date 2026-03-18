@@ -16,7 +16,7 @@ const Header = () => {
         <View style={styles.container}>
             <View style={styles.leftSection}>
                 {/* Logo — taps to Home */}
-                <TouchableOpacity onPress={() => navigation.navigate('Tabs', { screen: 'Home' })}>
+                <TouchableOpacity onPress={() => navigation.navigate('Tabs', { screen: 'Jasmine' })}>
                     <Image source={require('../../assets/logo.png')} style={styles.logoImage} />
                 </TouchableOpacity>
             </View>

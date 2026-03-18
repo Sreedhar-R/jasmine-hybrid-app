@@ -63,7 +63,7 @@ const LoginScreen = ({ route }) => {
             if (redirectTo) {
                 navigation.navigate(redirectTo);
             } else {
-                navigation.navigate('Tabs', { screen: 'Home' });
+                navigation.navigate('Tabs', { screen: 'Jasmine' });
             }
         } catch (err) {
             const msg = err?.message || 'Invalid credentials. Please try again.';
@@ -168,8 +168,8 @@ const LoginScreen = ({ route }) => {
                     {loading ? <ActivityIndicator color={COLORS.white} /> : <Text style={styles.buttonText}>Login</Text>}
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.homeLink} onPress={() => navigation.navigate('Tabs', { screen: 'Home' })}>
-                    <Text style={styles.homeLinkText}>← Back to Home</Text>
+                <TouchableOpacity style={styles.homeLink} onPress={() => navigation.navigate('Tabs', { screen: 'Jasmine' })}>
+                    <Text style={styles.homeLinkText}>← Back to Jasmine</Text>
                 </TouchableOpacity>
 
                 <View style={styles.row}>
