@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    SafeAreaView, ActivityIndicator,
+    SafeAreaView, ActivityIndicator, Image,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { COLORS, SIZES } from '../constants/theme';
@@ -18,6 +18,8 @@ const STATUS_COLOR = {
     'failed': { bg: '#FFEBEE', text: '#C62828' },
     'pending': { bg: '#FFF8E1', text: '#F57F17' },
 };
+ 
+const isUrl = (s) => typeof s === 'string' && (s.startsWith('http') || s.startsWith('/'));
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -91,7 +93,11 @@ const OrderCard = ({ order }) => {
             <View style={orderStyle.pillRow}>
                 {items.slice(0, expanded ? undefined : 2).map((it, i) => (
                     <View key={i} style={orderStyle.pill}>
-                        <Text style={orderStyle.pillEmoji}>{it.image}</Text>
+                        {isUrl(it.image) ? (
+                            <Image source={{ uri: it.image }} style={orderStyle.pillImg} resizeMode="cover" />
+                        ) : (
+                            <Text style={orderStyle.pillEmoji}>{it.image || '🛍'}</Text>
+                        )}
                         <Text style={orderStyle.pillName} numberOfLines={1}>{it.name}</Text>
                         <Text style={orderStyle.pillQty}>x{it.qty}</Text>
                     </View>
@@ -109,7 +115,11 @@ const OrderCard = ({ order }) => {
                     <View style={orderStyle.divider} />
                     {items.map((it, i) => (
                         <View key={i} style={orderStyle.itemRow}>
-                            <Text style={orderStyle.itemEmoji}>{it.image}</Text>
+                            {isUrl(it.image) ? (
+                                <Image source={{ uri: it.image }} style={orderStyle.itemImg} resizeMode="cover" />
+                            ) : (
+                                <Text style={orderStyle.itemEmoji}>{it.image || '🛍'}</Text>
+                            )}
                             <Text style={orderStyle.itemName} numberOfLines={1}>{it.name}</Text>
                             <Text style={orderStyle.itemUnit}>{it.unit}</Text>
                             <Text style={orderStyle.itemQty}>x{it.qty}</Text>
@@ -141,16 +151,18 @@ const orderStyle = StyleSheet.create({
     badgeText: { fontSize: 11, fontWeight: '700' },
     total: { fontSize: SIZES.medium, fontWeight: '700', color: '#1B4332', marginTop: 4 },
     pillRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-    pill: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F4F6F4', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4, gap: 4, maxWidth: 150 },
-    pillEmoji: { fontSize: 14 },
+    pill: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F4F6F4', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4, gap: 5, maxWidth: 150 },
+    pillImg: { width: 20, height: 20, borderRadius: 10, backgroundColor: '#E0E0E0' },
+    pillEmoji: { fontSize: 13 },
     pillName: { fontSize: 11, color: COLORS.black, flex: 1 },
     pillQty: { fontSize: 11, color: COLORS.gray },
     morePill: { backgroundColor: '#E8F5E9' },
     moreText: { fontSize: 11, color: '#1B4332', fontWeight: '600' },
     detail: { marginTop: 10 },
     divider: { height: 1, backgroundColor: COLORS.lightGray, marginVertical: 8 },
-    itemRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
-    itemEmoji: { fontSize: 16, marginRight: 6 },
+    itemRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+    itemImg: { width: 28, height: 28, borderRadius: 6, marginRight: 8, backgroundColor: '#F4F6F4' },
+    itemEmoji: { fontSize: 16, marginRight: 8 },
     itemName: { flex: 1, fontSize: SIZES.font, color: COLORS.black },
     itemUnit: { fontSize: 11, color: COLORS.gray, marginRight: 8 },
     itemQty: { fontSize: SIZES.font, color: COLORS.gray, marginRight: 8 },
@@ -303,6 +315,17 @@ const ProfileScreen = () => {
                             { icon: '📍', label: 'Addresses', onPress: () => navigation.navigate('Addresses') },
                             { icon: '📅', label: 'Subscriptions', onPress: () => navigation.navigate('Tabs', { screen: 'Subscription' }) },
                             { icon: '🛒', label: 'Cart', onPress: () => navigation.navigate('Tabs', { screen: 'Cart' }) },
+                            { icon: '❓', label: 'Support', onPress: () => {
+                                const num = '+918970299890';
+                                if (Platform.OS === 'web') {
+                                    window.alert(`Support: ${num}`);
+                                } else {
+                                    Alert.alert('Contact Us', `Support: ${num}`, [
+                                        { text: 'Cancel', style: 'cancel' },
+                                        { text: 'Call Now', onPress: () => Linking.openURL(`tel:${num}`) },
+                                    ]);
+                                }
+                            }},
                         ].map((a) => (
                             <TouchableOpacity key={a.label} style={styles.action} onPress={a.onPress}>
                                 <Text style={styles.actionIcon}>{a.icon}</Text>

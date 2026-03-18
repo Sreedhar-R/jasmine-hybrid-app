@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, useWindowDimensions, Platform, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, useWindowDimensions, Platform, Image, Linking } from 'react-native';
 import { SIZES } from '../constants/theme';
 
 const FOOTER_BG = '#F5F0E8';
@@ -27,7 +27,7 @@ const Footer = () => {
     const isLarge = width >= 768;
 
     const SOCIAL = [
-        { label: 'Instagram', icon: '📸', color: '#E1306C', bg: '#FDE8F1' },
+        { label: 'Instagram', icon: '📸', color: '#E1306C', bg: '#FDE8F1', url: 'https://www.instagram.com/jasmine_blr_14/' },
         { label: 'YouTube', icon: '▶', color: '#FF0000', bg: '#FFE8E8' },
         { label: 'Facebook', icon: 'f', color: '#1877F2', bg: '#E7F0FD' },
         { label: 'X (Twitter)', icon: '✕', color: '#000000', bg: '#EFEFEF' },
@@ -43,15 +43,15 @@ const Footer = () => {
                     <Image source={require('../../assets/logo.png')} style={styles.logoImage} />
                     <View style={styles.contactRow}>
                         <Text style={styles.contactIcon}>📍</Text>
-                        <Text style={styles.contactText}>Bengaluru, Karnataka</Text>
+                        <Text style={styles.contactText}>Karishma classic, srinivaspura cross, chansandra, rr nagar, Bangalore, India - 560098</Text>
                     </View>
                     <View style={styles.contactRow}>
                         <Text style={styles.contactIcon}>📞</Text>
-                        <Text style={styles.contactText}>+91 98000 00000</Text>
+                        <Text style={styles.contactText}>+91 89702 99890</Text>
                     </View>
                     <View style={styles.contactRow}>
                         <Text style={styles.contactIcon}>✉️</Text>
-                        <Text style={styles.contactText}>support@bloomfresh.com</Text>
+                        <Text style={styles.contactText}>jasmineblr14@gmail.com</Text>
                     </View>
                 </View>
 
@@ -70,8 +70,13 @@ const Footer = () => {
                 {/* Col 4 — Follow Us */}
                 <View style={styles.column}>
                     <Text style={styles.heading}>Follow Us</Text>
-                    {SOCIAL.map(({ label, icon, color, bg }) => (
-                        <TouchableOpacity key={label} style={styles.socialRow} activeOpacity={0.75}>
+                    {SOCIAL.map(({ label, icon, color, bg, url }) => (
+                        <TouchableOpacity 
+                            key={label} 
+                            style={styles.socialRow} 
+                            activeOpacity={0.75}
+                            onPress={() => url ? Linking.openURL(url) : null}
+                        >
                             {label === 'Instagram' && Platform.OS === 'web' ? (
                                 <img
                                     src={INSTAGRAM_SVG}

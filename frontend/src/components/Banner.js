@@ -6,10 +6,11 @@ import {
 import { COLORS, SIZES } from '../constants/theme';
 import { fetchBanners } from '../services/api';
 
-const BANNER_HEIGHT = 242;
-
 const Banner = () => {
     const { width } = useWindowDimensions();
+    const isLarge = width >= 768;
+    const isXLarge = width >= 1200;
+    const dynamicHeight = isXLarge ? 480 : (isLarge ? 350 : 242);
     const itemWidth = width - SIZES.padding * 2;
 
     const [banners, setBanners] = useState([]);
@@ -56,7 +57,7 @@ const Banner = () => {
     }
 
     return (
-        <View style={[styles.container, { width: itemWidth }]}>
+        <View style={[styles.container, { width: itemWidth, height: dynamicHeight }]}>
             {/* Horizontal paging ScrollView — explicit height avoids web collapse */}
             <ScrollView
                 ref={scrollRef}
@@ -66,14 +67,14 @@ const Banner = () => {
                 onScroll={handleScroll}
                 scrollEventThrottle={16}
                 style={styles.scrollView}
-                contentContainerStyle={{ height: BANNER_HEIGHT }}
+                contentContainerStyle={{ height: dynamicHeight }}
             >
                 {banners.map((item) => (
-                    <View key={item.id} style={[styles.slide, { width: itemWidth }]}>
+                    <View key={item.id} style={[styles.slide, { width: itemWidth, height: dynamicHeight }]}>
                         <Image
                             source={{ uri: item.image }}
-                            style={styles.image}
-                            resizeMode="cover"
+                            style={[styles.image, { height: dynamicHeight }]}
+                            resizeMode="contain"
                         />
                         <View style={styles.textContainer}>
                             <Text style={styles.title}>{item.name}</Text>
@@ -84,10 +85,10 @@ const Banner = () => {
             </ScrollView>
 
             {/* Prev / Next buttons */}
-            <TouchableOpacity style={[styles.navButton, styles.leftButton]} onPress={handlePrev}>
+            <TouchableOpacity style={[styles.navButton, styles.leftButton, { top: dynamicHeight / 2 - 20 }]} onPress={handlePrev}>
                 <Text style={styles.navText}>‹</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.navButton, styles.rightButton]} onPress={handleNext}>
+            <TouchableOpacity style={[styles.navButton, styles.rightButton, { top: dynamicHeight / 2 - 20 }]} onPress={handleNext}>
                 <Text style={styles.navText}>›</Text>
             </TouchableOpacity>
 
@@ -109,7 +110,6 @@ const styles = StyleSheet.create({
         marginTop: SIZES.base,
         borderRadius: SIZES.radius,
         overflow: 'hidden',
-        height: BANNER_HEIGHT,
         backgroundColor: COLORS.lightGray,
         alignSelf: 'center',
     },
@@ -118,14 +118,14 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     scrollView: {
-        height: BANNER_HEIGHT,
+        flex: 1,
     },
     slide: {
-        height: BANNER_HEIGHT,
+        backgroundColor: COLORS.white,
     },
     image: {
         width: '100%',
-        height: BANNER_HEIGHT,    // explicit px height — '100%' collapses to 0 on web
+        // height set dynamically
     },
     textContainer: {
         position: 'absolute',
@@ -147,7 +147,7 @@ const styles = StyleSheet.create({
     },
     navButton: {
         position: 'absolute',
-        top: BANNER_HEIGHT / 2 - 20,
+        // top set dynamically
         width: 40,
         height: 40,
         borderRadius: 20,

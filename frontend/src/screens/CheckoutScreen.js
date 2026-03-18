@@ -361,14 +361,24 @@ const CheckoutScreen = ({ navigation }) => {
             const orderPayload = {
                 userId: user?.id ?? null,
                 email: form.email,
-                items: items.map(i => ({
-                    productId: i.id,
-                    name: i.name,
-                    image: i.image ?? null,
-                    unit: i.unit ?? null,
-                    price: i.price,
-                    qty: i.qty,
-                })),
+                items: items.map(i => {
+                    // Be extremely defensive to avoid null images in orders
+                    const img = i.image || 
+                                i.productImage || 
+                                (Array.isArray(i.images) && i.images.length > 0 ? i.images[0] : null) ||
+                                i.thumbnail ||
+                                i.thumb ||
+                                null;
+                                
+                    return {
+                        productId: i.id,
+                        name: i.name,
+                        image: typeof img === 'string' ? img : (Array.isArray(img) ? img[0] : null),
+                        unit: i.unit ?? null,
+                        price: i.price,
+                        qty: i.qty,
+                    };
+                }),
                 address: addrSnap,
                 paymentMethod: payMethod,
                 razorpayOrderId: razorOrderId,

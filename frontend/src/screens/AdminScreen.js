@@ -91,8 +91,8 @@ const FORM_CONFIG = {
         { key: 'order', label: 'Display Order', numeric: true },
     ],
     banner: [
-        { key: 'title', label: 'Title', required: true },
-        { key: 'subtitle', label: 'Subtitle' },
+        { key: 'name', label: 'Name', required: true },
+        { key: 'description', label: 'Description' },
         { key: 'image', label: 'Banner Image', isImage: true, multiple: false },
         { key: 'order', label: 'Display Order', numeric: true },
         { key: 'active', label: 'Active', toggle: true },
@@ -399,7 +399,7 @@ const OrdersTab = () => {
                                 {/* Item thumbnails strip */}
                                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
                                     {items.map((it, i) => {
-                                        const img = it.image ?? it.productImage;
+                                        let img = it.image || it.productImage || (Array.isArray(it.images) && it.images.length > 0 ? it.images[0] : null);
                                         const name = it.name ?? it.productName;
                                         const qty = it.qty ?? it.quantity ?? 1;
                                         return (
@@ -613,8 +613,8 @@ const BannerRow = (item) => (
             </View>
         ) : null}
         <View style={{ paddingHorizontal: 2 }}>
-            <Text style={adm.rowTitle}>{item.title}</Text>
-            {item.subtitle ? <Text style={adm.rowMeta}>{item.subtitle}</Text> : null}
+            <Text style={adm.rowTitle}>{item.name}</Text>
+            {item.description ? <Text style={adm.rowMeta}>{item.description}</Text> : null}
             <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
                 <View style={[adm.chip, { backgroundColor: item.active ? '#D1FAE5' : '#F3F4F6' }]}>
                     <Text style={[adm.chipTxt, { color: item.active ? '#065F46' : P.subtle }]}>
@@ -785,7 +785,7 @@ const adm = StyleSheet.create({
     rowDesc: { fontSize: 12, color: P.subtle, marginTop: 4, fontStyle: 'italic' },
     chip: { backgroundColor: '#D1FAE5', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3, alignSelf: 'flex-start' },
     chipTxt: { fontSize: 10, color: '#065F46', fontWeight: '700' },
-    bannerImg: { width: '100%', height: 120, borderRadius: 10, backgroundColor: '#EEF2EE' },
+    bannerImg: { width: '100%', height: 220, borderRadius: 10, backgroundColor: '#EEF2EE' },
     empty: { textAlign: 'center', color: P.subtle, marginTop: 60, fontSize: 15 },
 });
 
