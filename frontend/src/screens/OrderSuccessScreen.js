@@ -22,7 +22,7 @@ const OrderSuccessScreen = ({ navigation, route }) => {
                         <Text style={styles.infoVal}>{orderId}</Text>
                         {total != null && (
                             <>
-                                <Text style={styles.infoLabel}>Total Paid</Text>
+                                <Text style={styles.infoLabel}>Total to be paid</Text>
                                 <Text style={styles.infoVal}>₹{Number(total).toFixed(2)}</Text>
                             </>
                         )}

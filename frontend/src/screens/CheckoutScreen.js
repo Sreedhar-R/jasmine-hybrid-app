@@ -157,11 +157,13 @@ const sumS = StyleSheet.create({
 // ── Payment method selector ───────────────────────────────────────────────────
 const PaymentSelector = ({ method, setMethod }) => {
     const options = [
-        { id: 'razorpay', label: 'Razorpay (Cards / UPI / Netbanking)', icon: '💳' },
         { id: 'cod', label: 'Cash on Delivery', icon: '🏠' },
     ];
     return (
         <View>
+            <View style={payS.banner}>
+                <Text style={payS.bannerTxt}>💳 Payments gateway will be integrated shortly. Currently, we only accept Cash on Delivery (COD).</Text>
+            </View>
             <Text style={styles.sectionHead}>Payment method</Text>
             {options.map((o) => (
                 <TouchableOpacity
@@ -181,6 +183,8 @@ const PaymentSelector = ({ method, setMethod }) => {
     );
 };
 const payS = StyleSheet.create({
+    banner: { backgroundColor: '#FFF7ED', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#FBBF24', marginBottom: 16 },
+    bannerTxt: { fontSize: 13, color: '#92400E', fontWeight: '600', lineHeight: 18 },
     card: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#D0D0D0', borderRadius: 8, padding: 14, marginBottom: 10 },
     cardSel: { borderColor: GREEN, backgroundColor: '#F0F7F4' },
     label: { fontSize: 15, color: COLORS.black, flex: 1 },
@@ -219,7 +223,7 @@ const CheckoutScreen = ({ navigation }) => {
     const [errors, setErrors] = useState({});
 
     /* ─── Payment ─── */
-    const [payMethod, setPayMethod] = useState('razorpay');
+    const [payMethod, setPayMethod] = useState('cod');
 
     /* ─── Discount ─── */
     const [discountCode, setDiscountCode] = useState('');
@@ -548,7 +552,7 @@ const CheckoutScreen = ({ navigation }) => {
                 <Text style={styles.shippingHint}>
                     {(showForm || addresses.length === 0)
                         ? 'Enter your shipping address to view available shipping methods.'
-                        : '✓ Free standard delivery (3–5 business days)'}
+                        : '🚚 All items are delivered between morning 6 to 9 am. For more queries contact through phone available at help icon.'}
                 </Text>
             </View>
 
