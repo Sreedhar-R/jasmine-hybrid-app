@@ -24,6 +24,7 @@ const styles = StyleSheet.create({
     container: {
         alignItems: 'center',
         width: '30%', // Approximate width for 3 columns
+        touchAction: 'pan-y',
     },
     imageContainer: {
         width: 75,

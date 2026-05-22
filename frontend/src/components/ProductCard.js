@@ -122,6 +122,7 @@ const styles = StyleSheet.create({
         shadowRadius: 6,
         elevation: 3,
         marginBottom: SIZES.padding,
+        touchAction: 'pan-y',
     },
     imageContainer: {
         backgroundColor: '#F8F8F6',
