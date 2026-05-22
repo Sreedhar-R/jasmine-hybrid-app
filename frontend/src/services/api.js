@@ -15,7 +15,7 @@ const isLocal = typeof window !== 'undefined' &&
 // If using Expo Go on a physical device, 'localhost' won't work to reach your computer.
 // Change localhost here to your computer's actual local IP if testing on a real phone!
 const BASE_URL = isLocal
-    ? `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:8080`
+    ? `http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:8000`
     : 'https://jasmine-backend-331312100274.us-central1.run.app';
 
 // const BASE_URL = 'https://jasmine-backend-331312100274.us-central1.run.app';
@@ -142,4 +142,36 @@ export const updateProduct = (id, data) =>
 export const deleteProduct = (id) =>
     apiFetch(`/products/${id}`, { method: 'DELETE' });
 
+export const ensureFirebaseUser = (email) =>
+    apiFetch('/auth/ensure-firebase-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+    });
 
+export const getLoginType = (email) =>
+    apiFetch('/auth/get-login-type', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+    });
+
+export const loginFirebaseUser = (idToken, password) =>
+    apiFetch('/auth/login-firebase', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken, password }),
+    });
+
+// ── Notifications ─────────────────────────────────────────────────────────────
+export const savePushToken = (userId, data) =>
+    apiFetch(`/users/${userId}/push-token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+    });
+
+export const fetchUserNotifications = (userId) => apiFetch(`/notifications/user/${userId}`);
+
+export const markNotificationRead = (notifId) =>
+    apiFetch(`/notifications/${notifId}/read`, { method: 'PUT' });

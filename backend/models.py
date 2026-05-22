@@ -102,3 +102,17 @@ class OrderCreate(BaseModel):
     shippingAmount: float = 0.0
     total: float
     status: str = "pending"            # pending | confirmed | processing | delivered | cancelled
+
+
+# ── Notifications & Devices ───────────────────────────────────────────────────
+
+class PushTokenCreate(BaseModel):
+    token: str
+    deviceType: Optional[str] = None
+
+class NotificationCreate(BaseModel):
+    userId: Optional[str] = None  # None for topic-based (e.g., 'all')
+    title: str
+    body: str
+    topic: Optional[str] = None
+    data: Optional[dict] = None

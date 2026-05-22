@@ -2,13 +2,13 @@ import React, { useState, useEffect } from 'react';
 import {
     View, Text, ScrollView, TextInput, TouchableOpacity,
     StyleSheet, SafeAreaView, Image, ActivityIndicator,
-    useWindowDimensions, Platform, Alert,
+    useWindowDimensions, Platform, Alert, Linking,
 } from 'react-native';
 import Header from '../components/Header';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import {
-    fetchUserAddresses, createRazorpayOrder, placeOrder,
+    fetchUserAddresses, createRazorpayOrder, placeOrder, createPhonePeOrder,
 } from '../services/api';
 import { COLORS, SIZES } from '../constants/theme';
 import MapAddressPicker from '../components/MapAddressPicker';
@@ -155,15 +155,15 @@ const sumS = StyleSheet.create({
 });
 
 // ── Payment method selector ───────────────────────────────────────────────────
+const PHONEPE_LOGO = require('../../assets/phonepe.png');
+
 const PaymentSelector = ({ method, setMethod }) => {
     const options = [
-        { id: 'cod', label: 'Cash on Delivery', icon: '🏠' },
+        { id: 'phonepe', label: 'PhonePe', logo: PHONEPE_LOGO, badge: 'UPI · Cards · Net Banking' },
+        { id: 'cod',     label: 'Cash on Delivery', icon: '🏠', badge: null },
     ];
     return (
         <View>
-            <View style={payS.banner}>
-                <Text style={payS.bannerTxt}>💳 Payments gateway will be integrated shortly. Currently, we only accept Cash on Delivery (COD).</Text>
-            </View>
             <Text style={styles.sectionHead}>Payment method</Text>
             {options.map((o) => (
                 <TouchableOpacity
@@ -175,19 +175,33 @@ const PaymentSelector = ({ method, setMethod }) => {
                     <View style={addrS.radio}>
                         {method === o.id && <View style={addrS.radioDot} />}
                     </View>
-                    <Text style={{ fontSize: 18, marginRight: 10 }}>{o.icon}</Text>
-                    <Text style={payS.label}>{o.label}</Text>
+                    {/* Icon: image for PhonePe, emoji for others */}
+                    {o.logo
+                        ? <Image source={o.logo} style={payS.logoImg} resizeMode="contain" />
+                        : <Text style={{ fontSize: 20, marginRight: 10 }}>{o.icon}</Text>
+                    }
+                    <View style={{ flex: 1 }}>
+                        <Text style={payS.label}>{o.label}</Text>
+                        {o.badge && <Text style={payS.badge}>{o.badge}</Text>}
+                    </View>
+                    {method === o.id && o.id === 'phonepe' && (
+                        <View style={payS.securedBadge}>
+                            <Text style={payS.securedTxt}>🔒 Secured</Text>
+                        </View>
+                    )}
                 </TouchableOpacity>
             ))}
         </View>
     );
 };
 const payS = StyleSheet.create({
-    banner: { backgroundColor: '#FFF7ED', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#FBBF24', marginBottom: 16 },
-    bannerTxt: { fontSize: 13, color: '#92400E', fontWeight: '600', lineHeight: 18 },
     card: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#D0D0D0', borderRadius: 8, padding: 14, marginBottom: 10 },
-    cardSel: { borderColor: GREEN, backgroundColor: '#F0F7F4' },
-    label: { fontSize: 15, color: COLORS.black, flex: 1 },
+    cardSel: { borderColor: '#5A2D82', backgroundColor: '#F8F0FF' },
+    label: { fontSize: 15, color: COLORS.black, fontWeight: '600' },
+    badge: { fontSize: 11, color: COLORS.gray, marginTop: 2 },
+    logoImg: { width: 36, height: 36, borderRadius: 8, marginRight: 10 },
+    securedBadge: { backgroundColor: '#E8FFE8', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1, borderColor: '#86EFAC' },
+    securedTxt: { fontSize: 11, color: '#15803D', fontWeight: '700' },
 });
 
 // ── Main Checkout Screen ──────────────────────────────────────────────────────
@@ -223,7 +237,7 @@ const CheckoutScreen = ({ navigation }) => {
     const [errors, setErrors] = useState({});
 
     /* ─── Payment ─── */
-    const [payMethod, setPayMethod] = useState('cod');
+    const [payMethod, setPayMethod] = useState('phonepe');
 
     /* ─── Discount ─── */
     const [discountCode, setDiscountCode] = useState('');
@@ -343,37 +357,83 @@ const CheckoutScreen = ({ navigation }) => {
             const addrSnap = buildAddressSnap();
             const total = subtotal - discount + SHIPPING_FEE;
 
-            let razorOrderId = null;
+            // ── PhonePe redirect flow ──────────────────────────────────────
+            if (payMethod === 'phonepe') {
+                const merchantOrderId = `JASMINE-${Date.now()}`;
+                // Determine redirect URL back to app/web after payment
+                const redirectUrl = Platform.OS === 'web'
+                    ? `${window.location.origin}?phonepe_order=${merchantOrderId}&status=done`
+                    : `http://localhost:8081?phonepe_order=${merchantOrderId}&status=done`;
 
-            if (payMethod === 'razorpay') {
-                // Step 1: create Razorpay order on backend
-                const rzOrder = await createRazorpayOrder(total);
-                razorOrderId = rzOrder.id;
+                // First create a pending order in Firestore
+                const orderPayload = {
+                    userId: user?.id ?? null,
+                    email: form.email,
+                    items: items.map(i => {
+                        const img = i.image ||
+                            i.productImage ||
+                            (Array.isArray(i.images) && i.images.length > 0 ? i.images[0] : null) ||
+                            i.thumbnail || i.thumb || null;
+                        return {
+                            productId: i.id,
+                            name: i.name,
+                            image: typeof img === 'string' ? img : (Array.isArray(img) ? img[0] : null),
+                            unit: i.unit ?? null,
+                            price: i.price,
+                            qty: i.qty,
+                        };
+                    }),
+                    address: addrSnap,
+                    paymentMethod: 'phonepe',
+                    merchantOrderId,
+                    discountCode: discountCode || null,
+                    discountAmount: discount,
+                    subtotal,
+                    shippingAmount: SHIPPING_FEE,
+                    total,
+                    status: 'pending_payment',
+                    bookingFor: bookingFor ?? null,
+                };
+                await placeOrder(orderPayload);
 
-                if (rzOrder._mock) {
-                    // Dev mode: skip real payment flow
-                    Alert.alert(
-                        '🧪 Dev Mode Payment',
-                        `Mock Razorpay order: ${razorOrderId}\n\nIn production, the Razorpay payment sheet would open here.`,
-                    );
+                // Call backend → PhonePe → get redirect URL
+                const ppResp = await createPhonePeOrder({ amount: total, merchantOrderId, redirectUrl });
+                const ppUrl = ppResp.redirectUrl;
+
+                if (!ppUrl) {
+                    throw new Error('PhonePe did not return a payment URL. Please try again.');
                 }
-                // In production: open Razorpay checkout sheet with rzOrder.id
-                // Requires react-native-razorpay or WebView integration
+
+                // Open PhonePe checkout in browser
+                clearCart();
+                if (Platform.OS === 'web') {
+                    window.location.href = ppUrl;
+                } else {
+                    const supported = await Linking.canOpenURL(ppUrl);
+                    if (supported) {
+                        await Linking.openURL(ppUrl);
+                    } else {
+                        throw new Error('Cannot open PhonePe payment page. Please try again.');
+                    }
+                }
+                return;
             }
 
-            // Step 2: create order in Firestore
+            // ── COD / other methods ────────────────────────────────────────
+            let razorOrderId = null;
+            if (payMethod === 'razorpay') {
+                const rzOrder = await createRazorpayOrder(total);
+                razorOrderId = rzOrder.id;
+            }
+
             const orderPayload = {
                 userId: user?.id ?? null,
                 email: form.email,
                 items: items.map(i => {
-                    // Be extremely defensive to avoid null images in orders
-                    const img = i.image || 
-                                i.productImage || 
-                                (Array.isArray(i.images) && i.images.length > 0 ? i.images[0] : null) ||
-                                i.thumbnail ||
-                                i.thumb ||
-                                null;
-                                
+                    const img = i.image ||
+                        i.productImage ||
+                        (Array.isArray(i.images) && i.images.length > 0 ? i.images[0] : null) ||
+                        i.thumbnail || i.thumb || null;
                     return {
                         productId: i.id,
                         name: i.name,
@@ -400,7 +460,7 @@ const CheckoutScreen = ({ navigation }) => {
             clearCart();
             navigation.replace('OrderSuccess', { orderId: created.id, total });
         } catch (err) {
-            Alert.alert('Order failed', err.message ?? 'Please try again.');
+            Alert.alert('Payment failed', err.message ?? 'Please try again.');
         } finally {
             setPlacing(false);
         }
@@ -563,14 +623,16 @@ const CheckoutScreen = ({ navigation }) => {
 
             {/* ── Pay button ── */}
             <TouchableOpacity
-                style={[styles.payBtn, placing && styles.payBtnDisabled]}
+                style={[styles.payBtn, payMethod === 'phonepe' && styles.payBtnPhonePe, placing && styles.payBtnDisabled]}
                 onPress={handlePay}
                 disabled={placing}
             >
                 {placing
                     ? <ActivityIndicator color="#FFF" />
                     : <Text style={styles.payTxt}>
-                        {payMethod === 'cod' ? '📦 Place Order (COD)' : '🔒 Pay now'}
+                        {payMethod === 'cod'
+                            ? '📦 Place Order (COD)'
+                            : '💜 Pay with PhonePe'}
                     </Text>
                 }
             </TouchableOpacity>
@@ -657,6 +719,7 @@ const styles = StyleSheet.create({
     shippingBox: { backgroundColor: '#F4F4F4', borderRadius: 8, padding: 16, borderWidth: 1, borderColor: '#E0E0E0' },
     shippingHint: { fontSize: 14, color: COLORS.gray, lineHeight: 20 },
     payBtn: { backgroundColor: GREEN, borderRadius: 8, paddingVertical: 18, alignItems: 'center', marginTop: 24 },
+    payBtnPhonePe: { backgroundColor: '#5A2D82' },
     payBtnDisabled: { opacity: 0.6 },
     payTxt: { color: '#FFF', fontWeight: '700', fontSize: 17 },
     shopMoreBtn: { 

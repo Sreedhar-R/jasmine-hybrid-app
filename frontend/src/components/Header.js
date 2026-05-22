@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, Platform, useWindowDimensions, Image, Alert, Linking } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, Platform, useWindowDimensions, Image, Alert, Linking, ScrollView, DeviceEventEmitter } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { COLORS, SIZES, FONTS } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
+import { fetchUserNotifications, markNotificationRead } from '../services/api';
+import { registerForPushNotificationsAsync } from '../services/notificationService';
 
 const Header = () => {
     const navigation = useNavigation();
@@ -11,6 +13,69 @@ const Header = () => {
     const { user } = useAuth();
     const { itemCount } = useCart();
     const [showHelp, setShowHelp] = useState(false);
+    const [showNotifications, setShowNotifications] = useState(false);
+    const [notifications, setNotifications] = useState([]);
+    
+    useEffect(() => {
+        let active = true;
+        async function setup() {
+            if (user?.id) {
+                registerForPushNotificationsAsync(user.id);
+                try {
+                    const data = await fetchUserNotifications(user.id);
+                    if (active) setNotifications(data);
+                } catch (e) {
+                    console.log('Error fetching notifications:', e);
+                }
+            } else {
+                if (active) setNotifications([]);
+            }
+        }
+        setup();
+        
+        const listener = DeviceEventEmitter.addListener('onNotificationReceived', () => {
+            if (user?.id) {
+                fetchUserNotifications(user.id).then(data => {
+                    if (active) setNotifications(data);
+                }).catch(console.log);
+            }
+        });
+        
+        // Polling fallback to guarantee the badge updates even if OS blocks the push
+        const pollInterval = setInterval(() => {
+            if (user?.id) {
+                fetchUserNotifications(user.id).then(data => {
+                    if (active) {
+                        setNotifications(prev => {
+                            // Only update state if something meaningfully changed (avoid unnecessary renders)
+                            if (prev.length !== data.length) return data;
+                            if (prev.filter(n => !n.read).length !== data.filter(n => !n.read).length) return data;
+                            return prev;
+                        });
+                    }
+                }).catch(() => {}); // silently ignore poll errors
+            }
+        }, 5000); // Check every 5 seconds
+        
+        return () => { 
+            active = false; 
+            listener.remove();
+            clearInterval(pollInterval);
+        };
+    }, [user]);
+    
+    const unreadCount = notifications.filter(n => !n.read).length;
+    
+    const handleReadNotification = async (notif) => {
+        if (!notif.read) {
+            try {
+                await markNotificationRead(notif.id);
+                setNotifications(prev => prev.map(n => n.id === notif.id ? { ...n, read: true } : n));
+            } catch (e) {
+                console.log(e);
+            }
+        }
+    };
 
     return (
         <View style={styles.container}>
@@ -69,7 +134,22 @@ const Header = () => {
 
                 <TouchableOpacity
                     style={styles.iconButton}
-                    onPress={() => setShowHelp(!showHelp)}
+                    onPress={() => { setShowNotifications(!showNotifications); setShowHelp(false); }}
+                >
+                    <View style={styles.cartWrap}>
+                        <Text style={styles.iconText}>🔔</Text>
+                        {unreadCount > 0 && (
+                            <View style={styles.badge}>
+                                <Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+                            </View>
+                        )}
+                    </View>
+                    <Text style={styles.navText}>Alerts</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={styles.iconButton}
+                    onPress={() => { setShowHelp(!showHelp); setShowNotifications(false); }}
                 >
                     <Text style={styles.iconText}>📞</Text>
                     <Text style={styles.navText}>Help</Text>
@@ -97,6 +177,34 @@ const Header = () => {
                             >
                                 <Text style={styles.helpLabel}>💬 WhatsApp</Text>
                             </TouchableOpacity>
+                        </View>
+                    </>
+                )}
+
+                {showNotifications && (
+                    <>
+                        <TouchableOpacity style={styles.helpBackdrop} activeOpacity={1} onPress={() => setShowNotifications(false)} />
+                        <View style={[styles.helpDropdown, { width: 300, maxHeight: 400, right: 60 }]}>
+                            <Text style={styles.helpTitle}>Notifications</Text>
+                            <ScrollView style={{ maxHeight: 300 }}>
+                                {notifications.length > 0 ? (
+                                    notifications.map(notif => (
+                                        <TouchableOpacity 
+                                            key={notif.id} 
+                                            style={[styles.notifItem, notif.read ? {} : styles.notifUnread]}
+                                            onPress={() => handleReadNotification(notif)}
+                                        >
+                                            <Text style={styles.notifTitle}>{notif.title}</Text>
+                                            <Text style={styles.notifBody}>{notif.body}</Text>
+                                            <Text style={styles.notifDate}>
+                                                {new Date(notif.createdAt).toLocaleDateString()}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    ))
+                                ) : (
+                                    <Text style={styles.helpValue}>No notifications yet.</Text>
+                                )}
+                            </ScrollView>
                         </View>
                     </>
                 )}
@@ -194,6 +302,11 @@ const styles = StyleSheet.create({
         backgroundColor: 'transparent',
         zIndex: 999,
     },
+    notifItem: { marginBottom: 12, borderBottomWidth: 1, borderBottomColor: '#f0f0f0', paddingBottom: 8 },
+    notifUnread: { backgroundColor: '#f0faf5', padding: 8, borderRadius: 6 },
+    notifTitle: { fontSize: 13, fontWeight: '700', color: COLORS.black },
+    notifBody: { fontSize: 12, color: COLORS.gray, marginTop: 4 },
+    notifDate: { fontSize: 10, color: '#aaa', marginTop: 4 },
 });
 
 export default Header;

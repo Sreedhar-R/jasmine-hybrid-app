@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, useWindowDimensions, Platform, Image, Linking } from 'react-native';
 import { SIZES } from '../constants/theme';
+import { useNavigation } from '@react-navigation/native';
 
 const FOOTER_BG = '#F5F0E8';
 const LINK_COLOR = '#555';
@@ -9,11 +10,22 @@ const HEADING_COLOR = '#1a1a1a';
 // Instagram real gradient SVG as a data URI
 const INSTAGRAM_SVG = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='1' x2='1' y2='0'%3E%3Cstop offset='0' stop-color='%23f09433'/%3E%3Cstop offset='.25' stop-color='%23e6683c'/%3E%3Cstop offset='.5' stop-color='%23dc2743'/%3E%3Cstop offset='.75' stop-color='%23cc2366'/%3E%3Cstop offset='1' stop-color='%23bc1888'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='24' height='24' rx='6' fill='url(%23g)'/%3E%3Crect x='4.5' y='4.5' width='15' height='15' rx='4' fill='none' stroke='white' stroke-width='1.5'/%3E%3Ccircle cx='12' cy='12' r='3.5' fill='none' stroke='white' stroke-width='1.5'/%3E%3Ccircle cx='17' cy='7' r='1.2' fill='white'/%3E%3C/svg%3E`;
 
-const FooterLink = ({ label }) => (
-    <TouchableOpacity activeOpacity={0.7}>
-        <Text style={styles.link}>{label}</Text>
-    </TouchableOpacity>
-);
+const FooterLink = ({ label }) => {
+    const navigation = useNavigation();
+
+    const handlePress = () => {
+        if (label === 'Sign In') navigation.navigate('Login');
+        else if (label === 'Privacy Policy') navigation.navigate('PrivacyPolicy');
+        else if (label === 'Return & Refund Policy') navigation.navigate('ReturnRefundPolicy');
+        else if (label === 'Terms of Service') navigation.navigate('TermsOfService');
+    };
+
+    return (
+        <TouchableOpacity activeOpacity={0.7} onPress={handlePress}>
+            <Text style={styles.link}>{label}</Text>
+        </TouchableOpacity>
+    );
+};
 
 const FooterColumn = ({ title, links }) => (
     <View style={styles.column}>
@@ -64,7 +76,7 @@ const Footer = () => {
                 {/* Col 3 — Store Policy */}
                 <FooterColumn
                     title="Store Policy"
-                    links={['Privacy Policy', 'Return & Refund Policy', 'Shipping Policy', 'Terms of Service']}
+                    links={['Privacy Policy', 'Return & Refund Policy', 'Terms of Service']}
                 />
 
                 {/* Col 4 — Follow Us */}

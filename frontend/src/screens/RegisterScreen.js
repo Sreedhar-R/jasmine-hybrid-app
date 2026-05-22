@@ -4,6 +4,8 @@ import {
     SafeAreaView, ActivityIndicator, ScrollView,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
+import { auth } from '../services/firebaseSetup';
 import { COLORS, SIZES } from '../constants/theme';
 import Header from '../components/Header';
 import { registerUser } from '../services/api';
@@ -77,6 +79,7 @@ const RegisterScreen = () => {
 
         setLoading(true);
         try {
+            // 1. Create Firestore user record (custom auth)
             await registerUser({
                 firstName: form.firstName.trim(),
                 lastName: form.lastName.trim(),
@@ -85,7 +88,26 @@ const RegisterScreen = () => {
                 password: form.password,
                 role: 'user',
             });
-            navigation.navigate('Login');
+
+            // 2. Create Firebase Auth user and send email verification
+            try {
+                const cred = await createUserWithEmailAndPassword(
+                    auth, form.email.trim(), form.password
+                );
+                await sendEmailVerification(cred.user);
+            } catch (fbErr) {
+                console.warn('Firebase Auth signup warning:', fbErr?.code, fbErr?.message);
+                // Surface a non-fatal warning so the user knows the email wasn't sent
+                // Account is still created in Firestore successfully
+                navigation.navigate('VerifyEmail', {
+                    email: form.email.trim(),
+                    emailError: `Verification email could not be sent: ${fbErr?.message}. Please contact support if this persists.`,
+                });
+                return;
+            }
+
+            // 3. Go to the verification screen
+            navigation.navigate('VerifyEmail', { email: form.email.trim() });
         } catch (err) {
             setSubmitError(err?.message || 'Registration failed. Please try again.');
         } finally {

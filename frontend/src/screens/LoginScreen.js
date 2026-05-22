@@ -4,9 +4,11 @@ import {
     SafeAreaView, ActivityIndicator, Platform,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { signInWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
+import { auth as firebaseAuth } from '../services/firebaseSetup';
 import { COLORS, SIZES } from '../constants/theme';
 import Header from '../components/Header';
-import { loginUser } from '../services/api';
+import { loginUser, getLoginType, loginFirebaseUser } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
 // ── Validators ────────────────────────────────────────────────────────────────
@@ -39,6 +41,9 @@ const LoginScreen = ({ route }) => {
     const [fieldErrors, setFieldErrors] = useState({});
     const [submitError, setSubmitError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [unverifiedEmail, setUnverifiedEmail] = useState(''); // email blocked due to unverified
+    const [resendLoading, setResendLoading] = useState(false);
+    const [resendMsg, setResendMsg] = useState('');
 
     const blurValidate = (field) => {
         const errs = validateLogin(mode, identifier, phoneDigits, password);
@@ -47,6 +52,8 @@ const LoginScreen = ({ route }) => {
 
     const handleLogin = async () => {
         setSubmitError('');
+        setUnverifiedEmail('');
+        setResendMsg('');
         const errs = validateLogin(mode, identifier, phoneDigits, password);
         setFieldErrors(errs);
         if (Object.keys(errs).length > 0) return;
@@ -57,9 +64,45 @@ const LoginScreen = ({ route }) => {
 
         setLoading(true);
         try {
+            // ── Email Login Logic ────────────────────────────────────────────
+            if (mode === 'email') {
+                // Determine if this user exists in Firebase Auth
+                const { type } = await getLoginType(identifier.trim());
+
+                if (type === 'firebase') {
+                    // MUST authenticate with Firebase Auth, preventing fallback to old Firestore password
+                    try {
+                        const cred = await signInWithEmailAndPassword(
+                            firebaseAuth, identifier.trim(), password
+                        );
+                        if (!cred.user.emailVerified) {
+                            setUnverifiedEmail(identifier.trim());
+                            setSubmitError('Please verify your email before logging in. Check your inbox.');
+                            setLoading(false);
+                            return;
+                        }
+                        
+                        // Successfully authenticated with Firebase. 
+                        // Sync the (potentially new) password to Firestore via the backend
+                        const idToken = await cred.user.getIdToken();
+                        const res = await loginFirebaseUser(idToken, password);
+
+                        auth.login(res.user);
+                        if (redirectTo) navigation.navigate(redirectTo);
+                        else navigation.navigate('Tabs', { screen: 'Jasmine' });
+                        return; // Done
+                    } catch (fbErr) {
+                        // Firebase Auth rejected it (wrong password).
+                        // Do NOT fall back to Firestore login, because they might have reset their password!
+                        throw new Error('Invalid credentials');
+                    }
+                }
+                // If type === 'firestore', they don't have a Firebase account yet. Fall through to standard login.
+            }
+
+            // ── Standard Backend Login (Phone or Firestore-only email) ───────
             const res = await loginUser(id, password);
-            auth.login(res.user);
-            // Redirect back to the caller screen, or default to Home
+
             if (redirectTo) {
                 navigation.navigate(redirectTo);
             } else {
@@ -74,6 +117,21 @@ const LoginScreen = ({ route }) => {
             }
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleResendVerification = async () => {
+        if (!unverifiedEmail) return;
+        setResendLoading(true);
+        setResendMsg('');
+        try {
+            const cred = await signInWithEmailAndPassword(firebaseAuth, unverifiedEmail, password);
+            await sendEmailVerification(cred.user);
+            setResendMsg('✅ Verification email resent! Check your inbox.');
+        } catch (err) {
+            setResendMsg('⚠️ Could not resend. Please try again.');
+        } finally {
+            setResendLoading(false);
         }
     };
 
@@ -105,6 +163,19 @@ const LoginScreen = ({ route }) => {
                 {!!submitError && (
                     <View style={styles.errorBanner}>
                         <Text style={styles.errorBannerText}>{submitError}</Text>
+                        {!!unverifiedEmail && (
+                            <TouchableOpacity
+                                onPress={handleResendVerification}
+                                disabled={resendLoading}
+                                style={{ marginTop: 8 }}
+                            >
+                                {resendLoading
+                                    ? <ActivityIndicator color={COLORS.red} size="small" />
+                                    : <Text style={styles.resendLink}>Resend verification email</Text>
+                                }
+                            </TouchableOpacity>
+                        )}
+                        {!!resendMsg && <Text style={styles.resendMsg}>{resendMsg}</Text>}
                     </View>
                 )}
 
@@ -163,6 +234,14 @@ const LoginScreen = ({ route }) => {
                         returnKeyType="done"
                     />
                 </Field>
+
+                {/* Forgot password link */}
+                <TouchableOpacity
+                    style={styles.forgotWrap}
+                    onPress={() => navigation.navigate('ForgotPassword')}
+                >
+                    <Text style={styles.forgotText}>Forgot password?</Text>
+                </TouchableOpacity>
 
                 <TouchableOpacity style={[styles.button, loading && { opacity: 0.6 }]} onPress={handleLogin} disabled={loading}>
                     {loading ? <ActivityIndicator color={COLORS.white} /> : <Text style={styles.buttonText}>Login</Text>}
@@ -241,6 +320,10 @@ const styles = StyleSheet.create({
     phoneInput: { flex: 1, paddingVertical: SIZES.small },
     digitCount: { fontSize: 11, color: COLORS.gray },
     fieldError: { fontSize: 11, color: COLORS.red, marginTop: -8, marginBottom: SIZES.small },
+    resendLink: { color: COLORS.red, fontSize: SIZES.font, fontWeight: '700', textAlign: 'center', textDecorationLine: 'underline' },
+    resendMsg: { color: COLORS.red, fontSize: 11, marginTop: 4, textAlign: 'center' },
+    forgotWrap: { alignItems: 'flex-end', marginTop: -8, marginBottom: SIZES.small },
+    forgotText: { color: '#1B4332', fontSize: SIZES.font, fontWeight: '600' },
     button: {
         backgroundColor: '#1B4332', padding: SIZES.medium,
         borderRadius: SIZES.radius, alignItems: 'center', marginTop: SIZES.small,

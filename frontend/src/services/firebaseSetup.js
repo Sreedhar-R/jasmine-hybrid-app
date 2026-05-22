@@ -1,5 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getStorage } from 'firebase/storage';
+import { getAuth } from 'firebase/auth';
 
 // In a real app, these should come from environment variables (.env)
 
@@ -23,4 +24,5 @@ if (getApps().length === 0) {
 
 // Export the storage instance
 export const storage = getStorage(app);
+export const auth = getAuth(app);
 export default app;

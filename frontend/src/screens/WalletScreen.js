@@ -5,13 +5,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    SafeAreaView, ActivityIndicator, Alert, Modal, TextInput,
+    SafeAreaView, ActivityIndicator, Alert, Modal, TextInput, Platform, Linking, Image,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import Header from '../components/Header';
 import { useAuth } from '../context/AuthContext';
 import { COLORS, SIZES } from '../constants/theme';
-import { getWalletBalance, getWalletTransactions, topUpWallet } from '../services/api';
+import { getWalletBalance, getWalletTransactions, topUpWallet, createPhonePeOrder } from '../services/api';
+
+const PHONEPE_LOGO = require('../../assets/phonepe.png');
+
 
 const GREEN = '#1B4332';
 const LIGHT_GREEN = '#F0F7F4';
@@ -61,10 +64,34 @@ const TopUpModal = ({ visible, userId, onClose, onSuccess }) => {
         }
         setSaving(true);
         try {
-            const result = await topUpWallet(userId, selectedAmount);
-            onSuccess(result.balance);
+            const merchantOrderId = `WALLET-${userId}-${Date.now()}`;
+            const redirectUrl = Platform.OS === 'web'
+                ? `${window.location.origin}?wallet_topup=${merchantOrderId}&amount=${selectedAmount}&userId=${userId}`
+                : `http://localhost:8081?wallet_topup=${merchantOrderId}&amount=${selectedAmount}&userId=${userId}`;
+
+            const ppResp = await createPhonePeOrder({
+                amount: selectedAmount,
+                merchantOrderId,
+                redirectUrl,
+            });
+
+            const ppUrl = ppResp.redirectUrl;
+            if (!ppUrl) {
+                throw new Error('PhonePe did not return a payment URL. Please try again.');
+            }
+
+            if (Platform.OS === 'web') {
+                window.location.href = ppUrl;
+            } else {
+                const supported = await Linking.canOpenURL(ppUrl);
+                if (supported) {
+                    await Linking.openURL(ppUrl);
+                } else {
+                    throw new Error('Cannot open PhonePe payment page.');
+                }
+            }
         } catch (err) {
-            Alert.alert('Error', err.message ?? 'Top-up failed.');
+            Alert.alert('Top-up failed', err.message ?? 'Please try again.');
         } finally {
             setSaving(false);
         }
@@ -124,7 +151,10 @@ const TopUpModal = ({ visible, userId, onClose, onSuccess }) => {
                         >
                             {saving
                                 ? <ActivityIndicator color="#fff" />
-                                : <Text style={mdl.confirmTxt}>💳  Add Money</Text>
+                                : <View style={mdl.confirmInner}>
+                                    <Image source={PHONEPE_LOGO} style={mdl.confirmLogo} resizeMode="contain" />
+                                    <Text style={mdl.confirmTxt}>Pay with PhonePe</Text>
+                                  </View>
                             }
                         </TouchableOpacity>
                     </ScrollView>
@@ -155,7 +185,9 @@ const mdl = StyleSheet.create({
     summaryBox: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: LIGHT_GREEN, borderRadius: 10, padding: 14, marginVertical: 16, borderWidth: 1, borderColor: '#C8E6C9' },
     summaryTxt: { fontSize: 14, color: '#555', fontWeight: '600' },
     summaryAmt: { fontSize: 20, fontWeight: '900', color: GREEN },
-    confirmBtn: { backgroundColor: GREEN, borderRadius: 12, paddingVertical: 16, alignItems: 'center' },
+    confirmBtn: { backgroundColor: '#5A2D82', borderRadius: 12, paddingVertical: 16, alignItems: 'center' },
+    confirmInner: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    confirmLogo: { width: 24, height: 24, borderRadius: 4 },
     confirmTxt: { color: '#fff', fontWeight: '800', fontSize: 15 },
 });
 

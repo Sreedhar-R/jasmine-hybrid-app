@@ -14,6 +14,11 @@ import OrderSuccessScreen from '../screens/OrderSuccessScreen';
 import AddressScreen from '../screens/AddressScreen';
 import WalletScreen from '../screens/WalletScreen';
 import AdminScreen from '../screens/AdminScreen';
+import VerifyEmailScreen from '../screens/VerifyEmailScreen';
+import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
+import PrivacyPolicyScreen from '../screens/PrivacyPolicyScreen';
+import ReturnRefundPolicyScreen from '../screens/ReturnRefundPolicyScreen';
+import TermsOfServiceScreen from '../screens/TermsOfServiceScreen';
 import { COLORS } from '../constants/theme';
 import { Text, Platform, useWindowDimensions } from 'react-native';
 import { useAuth } from '../context/AuthContext';
@@ -59,9 +64,38 @@ const TabNavigator = () => {
     );
 };
 
+const linking = {
+    prefixes: ['jasmine://'],
+    config: {
+        screens: {
+            Tabs: {
+                screens: {
+                    Jasmine: '',
+                    Subscription: 'subscription',
+                    Cart: 'cart',
+                    Profile: 'profile',
+                },
+            },
+            Search: 'search',
+            Login: 'login',
+            Register: 'register',
+            Checkout: 'checkout',
+            OrderSuccess: 'order_success',
+            Addresses: 'addresses',
+            Wallet: 'wallet',
+            Admin: 'admin',
+            VerifyEmail: 'verify_email',
+            ForgotPassword: 'forgot_password',
+            PrivacyPolicy: 'privacy_policy',
+            ReturnRefundPolicy: 'return_and_refund_policy',
+            TermsOfService: 'terms_of_service',
+        },
+    },
+};
+
 // Root stack: tabs + SearchScreen + Login + Register (no tab bar)
 const AppNavigator = () => (
-    <NavigationContainer>
+    <NavigationContainer linking={linking}>
         <Stack.Navigator screenOptions={{ headerShown: false }}>
             <Stack.Screen name="Tabs" component={TabNavigator} />
             <Stack.Screen
@@ -102,6 +136,31 @@ const AppNavigator = () => (
             <Stack.Screen
                 name="Admin"
                 component={AdminScreen}
+                options={{ animation: 'slide_from_right' }}
+            />
+            <Stack.Screen
+                name="VerifyEmail"
+                component={VerifyEmailScreen}
+                options={{ animation: 'slide_from_right' }}
+            />
+            <Stack.Screen
+                name="ForgotPassword"
+                component={ForgotPasswordScreen}
+                options={{ animation: 'slide_from_right' }}
+            />
+            <Stack.Screen
+                name="PrivacyPolicy"
+                component={PrivacyPolicyScreen}
+                options={{ animation: 'slide_from_right' }}
+            />
+            <Stack.Screen
+                name="ReturnRefundPolicy"
+                component={ReturnRefundPolicyScreen}
+                options={{ animation: 'slide_from_right' }}
+            />
+            <Stack.Screen
+                name="TermsOfService"
+                component={TermsOfServiceScreen}
                 options={{ animation: 'slide_from_right' }}
             />
         </Stack.Navigator>

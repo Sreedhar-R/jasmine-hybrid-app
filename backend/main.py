@@ -60,9 +60,120 @@ def login(data: LoginRequest):
     if not hashed or not verify_password(data.password, hashed):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
+    # If login is successful here, it means they are using their old Firestore password.
+    # To keep things seamless, if they don't have a Firebase Auth account yet,
+    # let's create it for them in the background so they are migrated.
+    from firebase_admin import auth as fb_auth
+    email = user.get("email", "").strip().lower()
+    if email:
+        try:
+            fb_auth.get_user_by_email(email)
+        except fb_auth.UserNotFoundError:
+            try:
+                # Migrate user to Firebase Auth with their current working password
+                fb_auth.create_user(email=email, password=data.password, email_verified=True)
+            except Exception as e:
+                print(f"Warning: could not migrate user {email} to FB Auth during login: {e}")
+
     # Return user without the hashed password
     safe_user = {k: v for k, v in user.items() if k != "hashedPassword"}
     return {"message": "Login successful", "user": safe_user}
+
+@app.post("/auth/get-login-type")
+def get_login_type(body: dict):
+    """
+    Returns 'firebase' if the user has a Firebase Auth account, otherwise 'firestore'.
+    This tells the frontend NOT to fall back to the Firestore DB if Firebase Auth fails
+    (which prevents using an old password after a reset).
+    """
+    from firebase_admin import auth as fb_auth
+    email = (body.get("email") or "").strip().lower()
+    if not email:
+        return {"type": "firestore"}
+    try:
+        fb_auth.get_user_by_email(email)
+        return {"type": "firebase"}
+    except:
+        return {"type": "firestore"}
+
+@app.post("/auth/login-firebase")
+def login_firebase(body: dict):
+    """
+    Log in using a Firebase Auth ID token.
+    Crucially, it also accepts a 'password' field to sync the newly verified
+    Firebase Auth password back into the Firestore DB, ensuring our custom backend
+    always has the latest hashed password.
+    """
+    from firebase_admin import auth as fb_auth
+    from models import get_password_hash
+    
+    id_token = body.get("idToken")
+    password = body.get("password")
+    
+    if not id_token:
+        raise HTTPException(status_code=400, detail="idToken is required")
+
+    try:
+        decoded = fb_auth.verify_id_token(id_token)
+        email = decoded.get("email")
+    except Exception as e:
+        raise HTTPException(status_code=401, detail="Invalid Firebase token")
+
+    if not email:
+        raise HTTPException(status_code=401, detail="Token contains no email")
+
+    users = query_documents("users", "email", "==", email)
+    if not users:
+        raise HTTPException(status_code=404, detail="User not found in database")
+
+    user = users[0]
+    
+    # Sync the password if provided (this happens when user logs in with new reset password)
+    if password:
+        hashed = get_password_hash(password)
+        update_document("users", user["id"], {
+            "hashedPassword": hashed,
+            "updatedAt": datetime.now(timezone.utc).isoformat()
+        })
+
+    safe_user = {k: v for k, v in user.items() if k != "hashedPassword"}
+    return {"message": "Login successful", "user": safe_user}
+
+
+@app.post("/auth/ensure-firebase-user")
+def ensure_firebase_user(body: dict):
+    """
+    Ensures a Firebase Authentication user exists for a given email.
+    Called before sending a password-reset email from the client,
+    to support accounts that were created before Firebase Auth was enabled.
+
+    Security: always returns 200 regardless of whether the email exists
+    in Firestore, to prevent email enumeration.
+    """
+    from firebase_admin import auth as fb_auth
+
+    email = (body.get("email") or "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=422, detail="Email is required")
+
+    # Only provision Firebase Auth user if email exists in our Firestore DB
+    users = query_documents("users", "email", "==", email)
+    if not users:
+        # Generic response — don't reveal whether email exists
+        return {"status": "ok"}
+
+    try:
+        fb_auth.get_user_by_email(email)
+        # Firebase Auth user already exists — nothing to do
+    except fb_auth.UserNotFoundError:
+        # Create a Firebase Auth record for this existing Firestore user
+        # (no password set — they'll reset it via the email link)
+        fb_auth.create_user(email=email)
+    except Exception as e:
+        # Log but don't expose internal errors
+        print(f"⚠️ ensure_firebase_user error for {email}: {e}")
+
+    return {"status": "ok"}
 
 
 
@@ -338,6 +449,70 @@ def set_primary_address(user_id: str, address_id: str):
     return {"message": "Primary address updated", "primaryAddressId": address_id}
 
 
+# ── Address deduplication (admin utility) ─────────────────────────────────────
+
+@app.post("/admin/dedup-addresses")
+def dedup_all_addresses():
+    """
+    One-shot cleanup: for every user, remove duplicate addresses that share
+    the same normalised street + city + zipCode, keeping the oldest one.
+    Returns a summary of how many were removed.
+    """
+    all_addresses = get_all_documents("addresses")
+
+    # Group by userId
+    by_user: dict = {}
+    for a in all_addresses:
+        uid = a.get("userId")
+        if uid:
+            by_user.setdefault(uid, []).append(a)
+
+    removed = 0
+    for uid, addrs in by_user.items():
+        # Sort oldest first so we keep the original
+        addrs.sort(key=lambda x: x.get("createdAt", ""))
+        seen: set = set()
+        for a in addrs:
+            key = (
+                a.get("street", "").strip().lower(),
+                a.get("city",   "").strip().lower(),
+                a.get("zipCode","").strip(),
+            )
+            if key in seen:
+                delete_document("addresses", a["id"])
+                removed += 1
+            else:
+                seen.add(key)
+
+    return {"message": f"Deduplication complete. Removed {removed} duplicate address(es)."}
+
+
+@app.post("/users/{user_id}/addresses/dedup")
+def dedup_user_addresses(user_id: str):
+    """Remove duplicate addresses for a single user."""
+    if not get_document("users", user_id):
+        raise HTTPException(status_code=404, detail="User not found")
+
+    addrs = query_documents("addresses", "userId", "==", user_id)
+    addrs.sort(key=lambda x: x.get("createdAt", ""))
+
+    seen: set = set()
+    removed = 0
+    for a in addrs:
+        key = (
+            a.get("street", "").strip().lower(),
+            a.get("city",   "").strip().lower(),
+            a.get("zipCode","").strip(),
+        )
+        if key in seen:
+            delete_document("addresses", a["id"])
+            removed += 1
+        else:
+            seen.add(key)
+
+    return {"userId": user_id, "removed": removed}
+
+
 # ── Orders ─────────────────────────────────────────────────────────────────────
 
 @app.get("/orders/user/{user_id}")
@@ -409,6 +584,151 @@ def razorpay_create_order(body: dict):
     }
 
 
+# ── PhonePe ──────────────────────────────────────────────────────────────────
+import httpx, uuid as _uuid
+
+PHONEPE_CLIENT_ID     = os.getenv("PHONEPE_CLIENT_ID",     "M238Q2WRI65WG_2603310733")
+PHONEPE_CLIENT_SECRET = os.getenv("PHONEPE_CLIENT_SECRET", "NmIyNmQxZmYtNTExMy00Zjk1LWEzMDAtNGQ1NTg1NmJlYTU1")
+PHONEPE_CLIENT_VERSION = int(os.getenv("PHONEPE_CLIENT_VERSION", "1"))
+
+# UAT (sandbox) base — switch to api.phonepe.com/apis/pg for production
+PHONEPE_BASE = os.getenv(
+    "PHONEPE_BASE_URL",
+    "https://api-preprod.phonepe.com/apis/pg-sandbox"
+)
+
+_phonepe_token_cache: dict = {}   # simple in-process cache { token, expires_at }
+
+
+def _get_phonepe_token() -> str:
+    """Return a valid PhonePe OAuth access token, refreshing if expired."""
+    import time
+    now = time.time()
+    cached = _phonepe_token_cache
+    if cached.get("token") and cached.get("expires_at", 0) > now + 30:
+        return cached["token"]
+
+    resp = httpx.post(
+        f"{PHONEPE_BASE}/v1/oauth/token",
+        data={
+            "client_id":      PHONEPE_CLIENT_ID,
+            "client_secret":  PHONEPE_CLIENT_SECRET,
+            "client_version": PHONEPE_CLIENT_VERSION,
+            "grant_type":     "client_credentials",
+        },
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        timeout=15,
+    )
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"PhonePe auth failed: {resp.text}")
+
+    data = resp.json()
+    token = data.get("access_token") or data.get("token") or data.get("accessToken")
+    expires_in = int(data.get("expires_in", 3600))
+
+    cached["token"] = token
+    cached["expires_at"] = now + expires_in
+    return token
+
+
+@app.post("/phonepe/create-order")
+def phonepe_create_order(body: dict):
+    """
+    Initiates a PhonePe payment.
+    Request body:
+      { amount: float (INR), merchantOrderId: str, redirectUrl: str, userId?: str }
+    Returns:
+      { redirectUrl: str, merchantOrderId: str, orderId: str }
+    """
+    amount_paise   = int(float(body.get("amount", 0)) * 100)
+    merchant_order_id = body.get("merchantOrderId") or f"ORD-{_uuid.uuid4().hex[:12].upper()}"
+    redirect_url   = body.get("redirectUrl", "http://localhost:8081")
+
+    if amount_paise <= 0:
+        raise HTTPException(status_code=422, detail="amount must be > 0")
+
+    try:
+        token = _get_phonepe_token()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"PhonePe auth error: {e}")
+
+    payload = {
+        "merchantOrderId": merchant_order_id,
+        "amount":          amount_paise,
+        "expireAfter":     900,           # 15 min window
+        "paymentFlow": {
+            "type": "PG_CHECKOUT",
+            "message": "Jasmine Payment",
+            "merchantUrls": {
+                "redirectUrl": redirect_url,
+            },
+        },
+    }
+
+    try:
+        resp = httpx.post(
+            f"{PHONEPE_BASE}/checkout/v2/pay",
+            json=payload,
+            headers={
+                "Content-Type":  "application/json",
+                "Authorization": f"O-Bearer {token}",
+            },
+            timeout=20,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"PhonePe request failed: {e}")
+
+    if resp.status_code not in (200, 201):
+        raise HTTPException(status_code=502, detail=f"PhonePe error: {resp.text}")
+
+    data = resp.json()
+
+    # Extract redirect URL from PhonePe response
+    redirect_info = (
+        data.get("redirectUrl")
+        or data.get("instrumentResponse", {}).get("redirectInfo", {}).get("url")
+        or data.get("data", {}).get("instrumentResponse", {}).get("redirectInfo", {}).get("url")
+    )
+
+    return {
+        "merchantOrderId": merchant_order_id,
+        "phonePeOrderId":  data.get("orderId") or data.get("id"),
+        "redirectUrl":     redirect_info,
+        "raw":             data,
+    }
+
+
+@app.get("/phonepe/order-status/{merchant_order_id}")
+def phonepe_order_status(merchant_order_id: str):
+    """
+    Check payment status for a given merchantOrderId.
+    """
+    try:
+        token = _get_phonepe_token()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"PhonePe auth error: {e}")
+
+    try:
+        resp = httpx.get(
+            f"{PHONEPE_BASE}/checkout/v2/order/{merchant_order_id}/status",
+            headers={"Authorization": f"O-Bearer {token}"},
+            timeout=15,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"PhonePe request failed: {e}")
+
+    if resp.status_code == 404:
+        raise HTTPException(status_code=404, detail="Order not found in PhonePe")
+    if resp.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"PhonePe status error: {resp.text}")
+
+    return resp.json()
+
+
 # ── Order creation ────────────────────────────────────────────────────────────
 from models import OrderCreate
 
@@ -443,25 +763,42 @@ def create_order(data: OrderCreate):
     order_id = create_document("orders", payload)
 
     # Optionally save address for the user if they're logged in
+    # Only save if this is a genuinely new address (no duplicate by street+city+zip)
     if data.userId and data.address:
         addr = data.address.model_dump()
         street = f"{addr['street']}" + (f", {addr['apartment']}" if addr.get("apartment") else "")
+        city    = addr.get("city", "").strip().lower()
+        zipCode = addr.get("zipCode", "").strip()
+
         existing = query_documents("addresses", "userId", "==", data.userId)
-        is_primary = len(existing) == 0
-        create_document("addresses", {
-            "userId":    data.userId,
-            "label":     "Home",
-            "street":    street,
-            "city":      addr["city"],
-            "state":     addr["state"],
-            "zipCode":   addr["zipCode"],
-            "country":   addr.get("country", "India"),
-            "lat":       addr.get("lat"),
-            "lng":       addr.get("lng"),
-            "mapUrl":    addr.get("mapUrl"),
-            "isPrimary": is_primary,
-            "createdAt": _now(),
-        })
+
+        # Check for a duplicate: same street (normalised) + city + zip
+        def _is_duplicate(a: dict) -> bool:
+            existing_street = a.get("street", "").strip().lower()
+            existing_city   = a.get("city",   "").strip().lower()
+            existing_zip    = a.get("zipCode","").strip()
+            return (
+                existing_street == street.strip().lower()
+                and existing_city   == city
+                and existing_zip    == zipCode
+            )
+
+        if not any(_is_duplicate(a) for a in existing):
+            is_primary = len(existing) == 0
+            create_document("addresses", {
+                "userId":    data.userId,
+                "label":     "Home",
+                "street":    street,
+                "city":      addr["city"],
+                "state":     addr["state"],
+                "zipCode":   addr["zipCode"],
+                "country":   addr.get("country", "India"),
+                "lat":       addr.get("lat"),
+                "lng":       addr.get("lng"),
+                "mapUrl":    addr.get("mapUrl"),
+                "isPrimary": is_primary,
+                "createdAt": _now(),
+            })
 
     # ── Deduct stock for each item ─────────────────────────────────────────
     for item in data.items:
@@ -810,3 +1147,101 @@ def process_due_subscriptions():
     }
 
 
+# ── Notifications & Devices ───────────────────────────────────────────────────
+
+from models import PushTokenCreate, NotificationCreate
+
+@app.post("/users/{user_id}/push-token")
+def save_push_token(user_id: str, data: PushTokenCreate):
+    if not get_document("users", user_id):
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Check if token already exists for this user
+    tokens = query_documents("push_tokens", "userId", "==", user_id)
+    for t in tokens:
+        if t.get("token") == data.token:
+            update_document("push_tokens", t["id"], {"updatedAt": _now()})
+            return {"message": "Token already saved"}
+            
+    create_document("push_tokens", {
+        "userId": user_id,
+        "token": data.token,
+        "deviceType": data.deviceType,
+        "createdAt": _now(),
+        "updatedAt": _now(),
+    })
+    return {"message": "Token saved"}
+
+@app.get("/notifications/user/{user_id}")
+def get_user_notifications(user_id: str):
+    """Get notifications for a specific user, plus all topic-based notifications (e.g., 'all')"""
+    if not get_document("users", user_id):
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    user_nots = query_documents("notifications", "userId", "==", user_id)
+    topic_nots = query_documents("notifications", "topic", "==", "all")
+    
+    combined = user_nots + topic_nots
+    # Sort newest first
+    combined.sort(key=lambda x: x.get("createdAt", ""), reverse=True)
+    return combined
+
+@app.put("/notifications/{notif_id}/read")
+def mark_notification_read(notif_id: str):
+    notif = get_document("notifications", notif_id)
+    if not notif:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    update_document("notifications", notif_id, {"read": True, "updatedAt": _now()})
+    return {"message": "Notification marked as read"}
+
+@app.post("/notifications/send")
+def send_notification(data: NotificationCreate):
+    """
+    Send a notification to a specific user or topic.
+    Admin only (ideally protected, but keeping simple for now)
+    """
+    from firebase_admin import messaging
+    
+    payload = data.model_dump()
+    payload["read"] = False
+    payload["createdAt"] = _now()
+    payload["updatedAt"] = _now()
+    
+    notif_id = create_document("notifications", payload)
+    
+    try:
+        data_str = {str(k): str(v) for k, v in (data.data or {}).items()}
+        
+        if data.userId:
+            tokens = query_documents("push_tokens", "userId", "==", data.userId)
+            token_strs = [t.get("token") for t in tokens if t.get("token")]
+            if token_strs:
+                message = messaging.MulticastMessage(
+                    notification=messaging.Notification(
+                        title=data.title,
+                        body=data.body,
+                    ),
+                    data=data_str,
+                    tokens=token_strs,
+                )
+                try:
+                    messaging.send_each_for_multicast(message)
+                except AttributeError:
+                    messaging.send_multicast(message)
+        else:
+            topic = data.topic or "all"
+            message = messaging.Message(
+                notification=messaging.Notification(
+                    title=data.title,
+                    body=data.body,
+                ),
+                data=data_str,
+                topic=topic,
+            )
+            messaging.send(message)
+            
+    except Exception as e:
+        print(f"Error sending FCM notification: {e}")
+        # Do not fail because DB logic succeeded
+        
+    return {"id": notif_id, "message": "Notification queued", **payload}
