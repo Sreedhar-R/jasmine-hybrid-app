@@ -59,11 +59,11 @@ const Footer = () => {
                     </View>
                     <View style={styles.contactRow}>
                         <Text style={styles.contactIcon}>📞</Text>
-                        <Text style={styles.contactText}>+91 89702 99890</Text>
+                        <Text style={styles.contactText}>+91 7760470358</Text>
                     </View>
                     <View style={styles.contactRow}>
                         <Text style={styles.contactIcon}>✉️</Text>
-                        <Text style={styles.contactText}>jasmineblr14@gmail.com</Text>
+                        <Text style={styles.contactText}>jasminepoojaflowers@gmail.com</Text>
                     </View>
                 </View>
 
@@ -83,9 +83,9 @@ const Footer = () => {
                 <View style={styles.column}>
                     <Text style={styles.heading}>Follow Us</Text>
                     {SOCIAL.map(({ label, icon, color, bg, url }) => (
-                        <TouchableOpacity 
-                            key={label} 
-                            style={styles.socialRow} 
+                        <TouchableOpacity
+                            key={label}
+                            style={styles.socialRow}
                             activeOpacity={0.75}
                             onPress={() => url ? Linking.openURL(url) : null}
                         >
@@ -145,7 +145,7 @@ const Footer = () => {
             {/* ── Bottom bar ── */}
             <View style={styles.bottomBar}>
                 <Text style={styles.bottomText}>
-                    © {new Date().getFullYear()} Bloom Fresh Pvt. Ltd. All rights reserved.
+                    © {new Date().getFullYear()} Jasmine Pooja Flowers All rights reserved.
                 </Text>
             </View>
         </View>

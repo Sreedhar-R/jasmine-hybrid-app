@@ -166,14 +166,14 @@ const Header = () => {
                             <Text style={styles.helpTitle}>Contact Support</Text>
                             <TouchableOpacity 
                                 style={styles.helpItem} 
-                                onPress={() => { Linking.openURL('tel:+918970299890'); setShowHelp(false); }}
+                                onPress={() => { Linking.openURL('tel:+917760470358'); setShowHelp(false); }}
                             >
                                 <Text style={styles.helpLabel}>📞 Call Now</Text>
-                                <Text style={styles.helpValue}>+91 89702 99890</Text>
+                                <Text style={styles.helpValue}>+91 7760470358</Text>
                             </TouchableOpacity>
                             <TouchableOpacity 
                                 style={styles.helpItem} 
-                                onPress={() => { Linking.openURL('https://wa.me/918970299890'); setShowHelp(false); }}
+                                onPress={() => { Linking.openURL('https://wa.me/917760470358'); setShowHelp(false); }}
                             >
                                 <Text style={styles.helpLabel}>💬 WhatsApp</Text>
                             </TouchableOpacity>

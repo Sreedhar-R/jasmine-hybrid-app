@@ -316,7 +316,7 @@ const ProfileScreen = () => {
                             { icon: '📅', label: 'Subscriptions', onPress: () => navigation.navigate('Tabs', { screen: 'Subscription' }) },
                             { icon: '🛒', label: 'Cart', onPress: () => navigation.navigate('Tabs', { screen: 'Cart' }) },
                             { icon: '❓', label: 'Support', onPress: () => {
-                                const num = '+918970299890';
+                                const num = '+917760470358';
                                 if (Platform.OS === 'web') {
                                     window.alert(`Support: ${num}`);
                                 } else {

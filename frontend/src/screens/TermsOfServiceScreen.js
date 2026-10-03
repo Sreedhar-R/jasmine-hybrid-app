@@ -47,6 +47,9 @@ const TermsOfServiceScreen = () => {
                     </Text>
                 </View>
             </ScrollView>
+            <View style={styles.copyright}>
+                <Text style={styles.copyrightText}>© 2026 Jasmine Pooja Flowers All rights reserved.</Text>
+            </View>
         </SafeAreaView>
     );
 };
@@ -87,6 +90,17 @@ const styles = StyleSheet.create({
         fontSize: SIZES.font,
         color: COLORS.gray,
         lineHeight: 24,
+    },
+    copyright: {
+        borderTopWidth: 1,
+        borderTopColor: '#ddd',
+        paddingVertical: 12,
+        alignItems: 'center',
+        backgroundColor: COLORS.white,
+    },
+    copyrightText: {
+        fontSize: SIZES.small || 12,
+        color: COLORS.gray,
     },
 });
 
